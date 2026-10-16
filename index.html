@@ -2,262 +2,1316 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trip Desk · Step 1 test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trip Desk</title>
+<meta name="theme-color" content="#C2410C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap">
 <style>
-:root{--bg:#0D1424;--sf:#16213A;--sf2:#1E2B4A;--ln:#2A3A5E;--ink:#F2F5FB;--mu:#A9B6D0;--ac:#FF8A4C;--onac:#1A0E05;--so:#3B2C2A;--si:#FFC9A8;--wb:#3A3320;--wi:#FFD76A;--bd:#4A1F2A;--bi:#FFB4C0}
+:root{--bg:#FFF3EA;--sf:#FFFFFF;--sf2:#FFF8F3;--ln:#F0D9C9;--ink:#2B1710;--mu:#6A4B3C;--ac:#C2410C;--onac:#FFFFFF;--so:#FFE2CF;--si:#7C2D0A;--wb:#FFF0C2;--wi:#6B4A00;--bd:#FBD9D3;--bi:#8A1C1C;color-scheme:light}
+:root[data-theme="midnight"]{--bg:#0D1424;--sf:#16213A;--sf2:#1E2B4A;--ln:#2A3A5E;--ink:#F2F5FB;--mu:#A9B6D0;--ac:#FF8A4C;--onac:#1A0E05;--so:#3B2C2A;--si:#FFC9A8;--wb:#3A3320;--wi:#FFD76A;--bd:#4A1F2A;--bi:#FFB4C0;color-scheme:dark}
+:root[data-theme="daylight"]{--bg:#F4F6FB;--sf:#FFFFFF;--sf2:#F1F3FA;--ln:#DDE2EE;--ink:#101828;--mu:#475467;--ac:#4F46E5;--onac:#FFFFFF;--so:#E6E7FD;--si:#2B2785;--wb:#FDF0D5;--wi:#7A4A06;--bd:#FDE4E4;--bi:#8A1C1C;color-scheme:light}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Manrope,system-ui,sans-serif}
-main{max-width:520px;margin:0 auto;padding:16px 16px 48px;display:flex;flex-direction:column;gap:16px}
-h1,h2{font-family:Sora,Manrope,sans-serif;margin:0;letter-spacing:-0.01em}
-h1{font-size:26px}h2{font-size:17px}
-.card{background:var(--sf);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
-label{font-size:13px;font-weight:700;color:var(--mu);display:block;margin-bottom:6px}
-input,select{width:100%;height:48px;border:1px solid var(--ln);border-radius:12px;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);background:var(--sf2)}
-.row{display:flex;gap:10px}.row>div{flex:1}
-button{font:inherit;cursor:pointer}
-.btn{height:50px;border:0;border-radius:14px;background:var(--ac);color:var(--onac);font-weight:700;font-size:16px;padding:0 16px}
-.btn2{height:44px;border-radius:12px;border:1px solid var(--ac);background:transparent;color:var(--ac);font-weight:700;padding:0 14px}
-.mu{color:var(--mu)}.small{font-size:13px}
-.chip{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--so);color:var(--si);white-space:nowrap}
-.chip.warn{background:var(--wb);color:var(--wi)}.chip.bad{background:var(--bd);color:var(--bi)}
-.kv{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ln);padding-top:8px}
-.kv b{text-align:right}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,sans-serif;font-size:15px;line-height:1.45}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 a{color:var(--ac)}
-ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
-.check{display:flex;align-items:center;gap:10px;min-height:44px}
-.check input{width:22px;height:22px}
-details summary{cursor:pointer;color:var(--mu);font-size:13px;min-height:32px}
-pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--sf2);border-radius:10px;padding:10px;margin:8px 0 0}
+#app{height:100dvh;display:flex;flex-direction:column;max-width:600px;margin:0 auto}
+header{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px}
+.brand{font-family:Sora,Manrope,sans-serif;font-weight:700;font-size:20px;letter-spacing:-.01em}
+main{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 28px;display:flex;flex-direction:column;gap:14px}
+nav{flex:none;display:flex;background:var(--sf);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;min-height:58px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;font-weight:700;color:var(--mu);cursor:pointer}
+nav button[aria-current="page"]{color:var(--ac)}
+nav .ico{font-size:20px;line-height:1}
+h1{margin:4px 0 0;font-family:Sora,Manrope,sans-serif;font-size:28px;line-height:1.1;letter-spacing:-.02em}
+h2{margin:0;font-family:Sora,Manrope,sans-serif;font-size:17px}
+h3{margin:0;font-size:15px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.card.hl{border-color:var(--ac)}
+.mu{color:var(--mu)}.sm{font-size:13px}.xs{font-size:12px}.b{font-weight:700}
+.row{display:flex;align-items:center;gap:10px}.wrap{flex-wrap:wrap}.between{justify-content:space-between}.grow{flex:1;min-width:0}
+.line{border-top:1px solid var(--ln);padding-top:10px}
+label{font-size:13px;font-weight:700;color:var(--mu)}
+.inp{height:48px;border:1px solid var(--ln);border-radius:12px;padding:0 14px;background:var(--sf2);width:100%;min-width:0}
+.btn{min-height:48px;border:0;border-radius:14px;background:var(--ac);color:var(--onac);font-weight:700;cursor:pointer;padding:0 16px}
+.btn2{min-height:44px;border-radius:12px;border:1px solid var(--ac);background:transparent;color:var(--ac);font-weight:700;cursor:pointer;padding:0 14px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.ibtn{flex:none;width:44px;height:44px;border-radius:12px;border:1px solid var(--ln);background:var(--sf2);cursor:pointer;font-size:18px}
+.ibtn:disabled{opacity:.35;cursor:default}
+.chip{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--so);color:var(--si);white-space:nowrap}
+.chip.warn{background:var(--wb);color:var(--wi)}.chip.bad{background:var(--bd);color:var(--bi)}.chip.plain{background:var(--sf2);color:var(--mu)}
+.segs{display:flex;gap:4px;background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:4px}
+.segs button{flex:1;min-height:44px;border-radius:10px;border:0;background:transparent;color:var(--mu);font-weight:700;cursor:pointer;padding:0 6px}
+.segs button[aria-pressed="true"]{background:var(--ac);color:var(--onac)}
+.pill{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--ln);background:var(--sf2);font-weight:700;cursor:pointer}
+.pill[aria-pressed="true"]{border-color:var(--ac);background:var(--so);color:var(--si)}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:56px;width:100%;padding:10px 14px;border-radius:14px;border:2px solid var(--ln);background:var(--sf2);cursor:pointer;text-align:left}
+.opt[aria-pressed="true"]{border-color:var(--ac);background:var(--so)}
+.num{width:28px;height:28px;border-radius:14px;background:var(--ac);color:var(--onac);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+.hero{background:var(--ac);color:var(--onac);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:6px}
+.hero .big{font-family:Sora,Manrope,sans-serif;font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.banner{background:var(--so);color:var(--si);border-radius:14px;padding:12px 14px;font-weight:500}
+.warnbox{background:var(--wb);color:var(--wi);border-radius:12px;padding:10px 12px}
+.photo{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;background:var(--sf2)}
+.thumb{flex:none;width:96px;height:72px;border-radius:12px;object-fit:cover;background:var(--so);display:flex;align-items:center;justify-content:center;font-size:34px}
+.bar{height:12px;border-radius:6px;background:var(--sf2);overflow:hidden}.bar>div{height:100%;background:var(--ac)}
+.months{display:flex;align-items:flex-end;gap:4px;height:70px}
+.months>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:70px;font-size:11px;color:var(--mu)}
+.months span{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--so)}
+.months span.on{background:var(--ac)}
+.switch{flex:none;position:relative;width:52px;height:32px;border-radius:16px;border:0;cursor:pointer;background:var(--ln)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:13px;background:var(--mu);transition:left .15s}
+.switch[aria-pressed="true"]{background:var(--ac)}.switch[aria-pressed="true"]::after{left:23px;background:var(--onac)}
+.check{min-height:48px;display:flex;align-items:center;gap:12px;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;width:100%}
+.box{flex:none;width:24px;height:24px;border-radius:7px;border:2px solid var(--mu);display:flex;align-items:center;justify-content:center;color:var(--onac);font-size:14px}
+.check[aria-pressed="true"] .box{background:var(--ac);border-color:var(--ac)}
+details summary{cursor:pointer;font-weight:700;min-height:32px}
+ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.kv{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ln);padding-top:8px}
+.kv>:last-child{font-weight:700;text-align:right}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--ln);border-top-color:var(--ac);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
 <body>
-<main>
-<div>
-<h1>Trip Desk</h1>
-<div class="mu small">Step 1 test page. Checks that the backend can research a trip.</div>
+<div id="app">
+  <header>
+    <div class="brand">Trip Desk</div>
+    <button class="ibtn" id="gear" type="button" aria-label="Settings and saved plans">⚙️</button>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <nav id="nav" aria-label="Sections"></nav>
 </div>
-
-<section class="card" aria-labelledby="h-conn">
-<h2 id="h-conn">Connection</h2>
-<div><label for="url">Backend web app URL (ends in /exec)</label><input id="url" type="url" autocomplete="off"></div>
-<div><label for="pass">Passcode</label><input id="pass" type="password" autocomplete="off"></div>
-<div class="row"><button class="btn2" id="save" type="button">Save and test</button></div>
-<div id="connStatus" class="small mu" role="status"></div>
-</section>
-
-<section class="card" aria-labelledby="h-trip">
-<h2 id="h-trip">Trip</h2>
-<div><label for="dest">Destination or route</label><input id="dest" type="text" value="Bali, Indonesia"><div class="small mu">For several places, separate them with &gt; and add nights after a colon, for example: Kanyakumari:2 &gt; Kerala:4 &gt; Tirupati:2</div></div>
-<div class="row">
-<div><label for="from">Flying from</label><input id="from" type="text" value="Kolkata"></div>
-<div><label for="passport">Passport</label><input id="passport" type="text" value="India"></div>
-</div>
-<div class="row">
-<div><label for="start">Start date</label><input id="start" type="date"></div>
-<div><label for="days">Days</label><input id="days" type="number" min="2" max="21" value="6"></div>
-</div>
-<div class="row">
-<div><label for="budget">Budget</label><select id="budget"><option value="budget">Budget</option><option value="comfort" selected>Comfort</option><option value="premium">Premium</option></select></div>
-<div><label for="food">Food</label><select id="food"><option value="both" selected>Both</option><option value="veg">Veg</option><option value="nonveg">Non-veg</option></select></div>
-</div>
-<div><label for="interests">Interests (comma separated)</label><input id="interests" type="text" value="beaches, food, culture"></div>
-<label class="check"><input id="free" type="checkbox"> Free style: pick the best dates and mix for me</label>
-<button class="btn" id="go" type="button">Research this trip</button>
-<div class="small mu" id="runStatus" role="status"></div>
-</section>
-
-<div id="results" style="display:flex;flex-direction:column;gap:16px"></div>
-</main>
-
 <script>
-const SECTIONS = [
-  ['overview', 'Best time and weather'],
-  ['visa', 'Visa and passport'],
-  ['food', 'Food'],
-  ['itinerary', 'Itinerary'],
-  ['routes', 'Trains, buses and flights between places'],
-  ['local', 'Getting around locally']
-];
-const $ = (id) => document.getElementById(id);
-const store = {
-  get: (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+'use strict';
+/* ============================================================
+   Trip Desk: free-first trip planner.
+   Live data with no API key: Open-Meteo, Wikivoyage, Wikipedia,
+   Wikimedia Commons, REST Countries, open.er-api.com, Bing News (via your proxy).
+   Claude is used only by the "Check my plan" button, through your Apps Script backend.
+   ============================================================ */
+
+const LS = 'tripdesk.v1', LSR = 'tripdesk.research.v1', LSV = 'tripdesk.visa.v1';
+const enc = encodeURIComponent;
+const DAY = 86400000;
+
+function isoOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function parseIso(s) { const p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function addDays(s, n) { const d = parseIso(s); d.setDate(d.getDate() + n); return isoOf(d); }
+function todayIso() { return isoOf(new Date()); }
+function nice(s, opt) { return parseIso(s).toLocaleDateString('en-GB', opt || { weekday: 'short', day: 'numeric', month: 'short' }); }
+function fmt(n) { return Math.round(n || 0).toLocaleString('en-IN'); }
+function fmtH(h) { const m = Math.round(h * 60); return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm'; }
+function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function keyOf(name) { return norm(name); }
+function slug(s) { return norm(s).replace(/ /g, '-'); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+/* ---------- state ---------- */
+const DEFAULTS = {
+  tab: 'plan', back: 'plan', rsub: 'legs', dsub: 'plan', wsub: 'exp', lstop: 0, banner: '',
+  settings: {
+    theme: 'sunset', home: { name: 'Kolkata', lat: 22.5726, lng: 88.3639, cc: 'IN', country: 'India' }, passport: 'India',
+    food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid',
+    proxy: 'https://youtubenews.banerjee-tara.workers.dev/?url=', backend: '', passcode: ''
+  },
+  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {} },
+  wdate: '', wstop: 0, people: ['You', 'Partner'], payer: 0, expenses: [], docs: {}, plans: [],
+  check: null, meterLog: []
 };
+let S = load(LS, DEFAULTS);
+let R = load(LSR, {});              // research per place key
+let V = load(LSV, null);            // visa table cache
+let RATES = null;                   // {at, rates} per INR
+const busy = {};                    // key -> {source: true}
+const mem = { wx: {}, photos: {}, news: {} };
 
-function el(tag, attrs, kids) {
-  const n = document.createElement(tag);
-  Object.keys(attrs || {}).forEach((k) => {
-    if (k === 'class') n.className = attrs[k]; else n.setAttribute(k, attrs[k]);
+function load(k, def) {
+  try {
+    const raw = localStorage.getItem(k);
+    if (!raw) return structuredClone(def);
+    const v = JSON.parse(raw);
+    if (def && typeof def === 'object' && !Array.isArray(def)) return deepMerge(structuredClone(def), v);
+    return v;
+  } catch (e) { return def === null ? null : structuredClone(def); }
+}
+function deepMerge(a, b) {
+  Object.keys(b || {}).forEach((k) => {
+    if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object' && !Array.isArray(a[k])) deepMerge(a[k], b[k]);
+    else a[k] = b[k];
   });
-  [].concat(kids === undefined ? [] : kids).forEach((c) => {
-    if (c === null || c === undefined) return;
-    n.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  return a;
+}
+function save() {
+  try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {}
+  try { localStorage.setItem(LSR, JSON.stringify(R)); } catch (e) { pruneResearch(); }
+}
+function pruneResearch() {
+  const keep = new Set(S.trip.stops.map((s) => s.key));
+  Object.keys(R).forEach((k) => { if (!keep.has(k)) delete R[k]; });
+  try { localStorage.setItem(LSR, JSON.stringify(R)); } catch (e) {}
+}
+function set(fn) { fn(S); save(); render(); }
+
+/* ---------- DOM helper ---------- */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  Object.entries(props || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === false) return;
+    if (k === 'class') el.className = v;
+    else if (k === 'style') el.style.cssText = v;
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'value') el.value = v;
+    else el.setAttribute(k, v === true ? '' : v);
   });
-  return n;
+  kids.flat(Infinity).forEach((c) => {
+    if (c === null || c === undefined || c === false) return;
+    el.append(c.nodeType ? c : String(c));
+  });
+  return el;
 }
-function link(url, label) {
-  if (!/^https?:\/\//i.test(String(url || ''))) return document.createTextNode(label || String(url || ''));
-  return el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, label || url);
+function ext(url, label, cls) {
+  if (!/^https?:\/\//i.test(String(url || ''))) return h('span', {}, label || '');
+  return h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: cls || '' }, label || url);
 }
-function kv(k, v) { return el('div', { class: 'kv' }, [el('span', { class: 'mu' }, k), el('b', {}, v === null || v === undefined || v === '' ? 'Not found' : String(v))]); }
-function list(items) { return el('ul', {}, (items || []).map((t) => el('li', {}, String(t)))); }
-function inr(n) { return n === null || n === undefined ? 'n/a' : '₹' + Math.round(n).toLocaleString('en-IN'); }
+function segs(items, cur, onPick) {
+  return h('div', { class: 'segs' }, items.map(([v, l]) => h('button', { type: 'button', 'aria-pressed': String(cur === v), onclick: () => onPick(v) }, l)));
+}
+function chip(text, tone) { return h('span', { class: 'chip ' + (tone || '') }, text); }
+function sw(on, label, onClick) { return h('button', { type: 'button', class: 'switch', 'aria-pressed': String(!!on), 'aria-label': label, onclick: onClick }); }
+function stepper(label, value, onMinus, onPlus) {
+  return h('div', { class: 'row' },
+    h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Less ' + label, onclick: onMinus }, '−'),
+    h('div', { class: 'b', style: 'min-width:96px;text-align:center' }, value),
+    h('button', { type: 'button', class: 'ibtn', 'aria-label': 'More ' + label, onclick: onPlus }, '+'));
+}
 
-async function call(body) {
-  const url = store.get('td_url'), pass = store.get('td_pass');
-  if (!url || !pass) throw new Error('Add the backend URL and passcode first.');
-  const res = await fetch(url, { method: 'POST', body: JSON.stringify(Object.assign({ passcode: pass }, body)) });
-  const text = await res.text();
-  let json;
-  try { json = JSON.parse(text); } catch (e) { throw new Error('The backend sent something unexpected: ' + text.slice(0, 120)); }
-  if (!json.ok) throw new Error(json.error || 'Backend error');
-  return json;
+/* ---------- network ---------- */
+async function getJSON(url, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 15000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch (e) {
+    throw new Error(e.name === 'AbortError' ? 'Timed out' : (e.message || 'Network error'));
+  } finally { clearTimeout(t); }
+}
+async function getText(url, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms || 15000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  } catch (e) {
+    throw new Error(e.name === 'AbortError' ? 'Timed out' : (e.message || 'Network error'));
+  } finally { clearTimeout(t); }
 }
 
-function parseStops(text) {
-  const parts = text.split('>').map((s) => s.trim()).filter(Boolean);
-  if (parts.length < 2) return null;
-  const total = Number($('days').value) || 6;
-  const each = Math.max(1, Math.round(total / parts.length));
-  return parts.map((p) => {
-    const m = p.match(/^(.*?)\s*:\s*(\d+)$/);
-    return m ? { name: m[1].trim(), nights: Number(m[2]) } : { name: p, nights: each };
+/* ---------- places: geocoding ---------- */
+async function geocode(input) {
+  const parts = String(input).split(',').map((s) => s.trim()).filter(Boolean);
+  const name = parts[0], hint = norm(parts.slice(1).join(' '));
+  let res = [];
+  try {
+    const j = await getJSON('https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=' + enc(name));
+    res = (j.results || []).map((r) => ({ name: r.name, lat: r.latitude, lng: r.longitude, cc: r.country_code || '', country: r.country || '', admin1: r.admin1 || '', pop: r.population || 0 }));
+  } catch (e) { /* fall through to Wikipedia */ }
+  if (hint) {
+    const f = res.filter((r) => norm(r.country + ' ' + r.admin1).includes(hint));
+    if (f.length) res = f;
+  }
+  const home = S.settings.home && S.settings.home.cc;
+  res.sort((a, b) => (b.cc === home) - (a.cc === home) || b.pop - a.pop);
+  if (!res.length) {
+    const w = await getJSON('https://en.wikipedia.org/w/api.php?action=query&prop=coordinates&redirects=1&format=json&formatversion=2&origin=*&titles=' + enc(name));
+    const pg = w.query && w.query.pages && w.query.pages[0];
+    if (pg && pg.coordinates && pg.coordinates[0]) res = [{ name: pg.title, lat: pg.coordinates[0].lat, lng: pg.coordinates[0].lon, cc: '', country: '', admin1: '' }];
+  }
+  return res;
+}
+function hav(a, b) {
+  const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(x));
+}
+
+/* ---------- Wikivoyage ---------- */
+const WV = 'https://en.wikivoyage.org/w/api.php?format=json&formatversion=2&origin=*&redirects=1';
+const WANT = {
+  understand: /^understand/i, getin: /^get in/i, getaround: /^get around/i, see: /^see\b/i, do: /^do\b/i,
+  eat: /^eat\b/i, sleep: /^sleep\b/i, safe: /^stay (safe|healthy)/i, cities: /^cities\b/i, other: /^other destinations/i
+};
+async function wvParseSections(title) {
+  const j = await getJSON(WV + '&action=parse&prop=sections&page=' + enc(title));
+  if (j.error || !j.parse) throw new Error((j.error && j.error.info) || 'missing');
+  return j.parse;
+}
+async function wvFind(stop) {
+  const tries = [stop.name, stop.geo && stop.geo.name].filter(Boolean);
+  for (const t of tries) { try { return await wvParseSections(t); } catch (e) {} }
+  const s = await getJSON(WV + '&action=opensearch&limit=3&search=' + enc(stop.geo ? stop.geo.name : stop.name));
+  const t = s && s[1] && s[1][0];
+  if (!t) throw new Error('No Wikivoyage page for this place');
+  return wvParseSections(t);
+}
+function cleanDoc(html) {
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  d.querySelectorAll('style,script,sup,.mw-editsection,.noprint,.listing-metadata,.listing-coordinates,.geo,.mw-references-wrap,.reference,.navbox,.thumb,figure,.mw-kartographer-maplink,.listing-sister-icons,.pagebanner,.mw-empty-elt').forEach((n) => n.remove());
+  return d;
+}
+function txt(n) { return (n && n.textContent || '').replace(/\s+/g, ' ').replace(/\s([,.;:])/g, '$1').trim(); }
+function listItems(d, max) {
+  const out = [], seen = new Set();
+  d.querySelectorAll('li').forEach((li) => {
+    if (li.closest('.toc')) return;
+    const t = txt(li);
+    if (t.length < 12) return;
+    const nEl = li.querySelector('.listing-name, .fn, b');
+    let name = nEl ? txt(nEl) : '';
+    if (!name || name.length > 80) name = t.split(/[.:—–(]/)[0].slice(0, 70).trim();
+    const k = norm(name);
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    const pEl = li.querySelector('.listing-price');
+    let body = t.startsWith(name) ? t.slice(name.length).replace(/^[\s,.:;—–-]+/, '') : t;
+    if (!body) body = t;
+    out.push({ name, text: body.slice(0, 340), price: pEl ? txt(pEl) : '' });
+  });
+  return out.slice(0, max || 14);
+}
+function paragraphs(d, max) { return [...d.querySelectorAll('p')].map(txt).filter((t) => t.length > 40).slice(0, max || 4); }
+
+const MODES = [
+  ['Tuk-tuk', /tuk[\s-]?tuks?/i, '🛺'], ['Auto-rickshaw', /auto[\s-]?rickshaws?|\bautos\b/i, '🛺'], ['Cycle rickshaw', /cycle[\s-]?rickshaws?|pedicabs?|becaks?/i, '🚲'],
+  ['Motorbike taxi', /motorbike taxis?|motorcycle taxis?|bike taxis?|ojek/i, '🏍️'], ['Ride-hailing apps', /\b(grab|gojek|uber|ola cabs|\bola\b|bolt|rapido|careem|lyft)\b/i, '📱'],
+  ['Taxi', /\btaxis?\b|\bcabs?\b/i, '🚕'], ['Metro and skytrain', /\b(metro|mrt|bts|subway|skytrain|underground|lrt)\b/i, '🚇'], ['Songthaew', /songthaews?/i, '🛻'],
+  ['Bus', /\bbus(es)?\b/i, '🚌'], ['Ferry and boat', /\b(ferr(y|ies)|boats?|water ?bus(es)?|houseboats?|longtails?)\b/i, '⛴️'],
+  ['Scooter and motorbike', /\b(scooters?|motorbikes?|motorcycles?|mopeds?|two[\s-]?wheelers?)\b/i, '🛵'], ['Tram', /\btrams?\b/i, '🚋'],
+  ['Train', /\b(trains?|railway|rail)\b/i, '🚆'], ['Bicycle', /\b(bicycles?|cycling)\b/i, '🚲'], ['Jeep', /\bjeeps?\b/i, '🚙'],
+  ['Car with driver', /car with (a )?driver|hire a car|car rental|rent a car|self[\s-]?drive/i, '🚗'], ['On foot', /\bon foot\b|\bwalking\b/i, '🚶']
+];
+function modeIcon(name) { const m = MODES.find((x) => x[1].test(name)); return m ? m[2] : '🧭'; }
+function headingBlocks(d) {
+  const hs = [...d.body.querySelectorAll('h2,h3,h4,h5')];
+  return hs.map((hd) => {
+    const box = hd.closest('.mw-heading') || hd;
+    let n = box.nextElementSibling; const parts = [];
+    while (n && !(n.matches('.mw-heading,h2,h3,h4,h5'))) { parts.push(txt(n)); n = n.nextElementSibling; }
+    return { title: txt(hd), text: parts.join(' ').replace(/\s+/g, ' ').trim() };
+  });
+}
+function extractModes(d) {
+  const blocks = headingBlocks(d).filter((b) => /^by\s/i.test(b.title) && b.text.length > 20);
+  let modes = blocks.map((b) => ({ name: b.title.replace(/^by\s+/i, '').replace(/^\w/, (c) => c.toUpperCase()), text: b.text.slice(0, 900) }));
+  if (modes.length < 2) {
+    const all = txt(d.body);
+    const sentences = all.split(/(?<=[.!?])\s+/);
+    const found = [];
+    MODES.forEach(([name, re]) => {
+      if (modes.some((m) => re.test(m.name))) return;
+      const ss = sentences.filter((s) => re.test(s)).slice(0, 3);
+      if (ss.length) found.push({ name, text: ss.join(' ').slice(0, 900), pos: all.search(re) });
+    });
+    found.sort((a, b) => a.pos - b.pos);
+    modes = modes.concat(found.map(({ name, text }) => ({ name, text })));
+  }
+  return modes.slice(0, 9);
+}
+
+/* fares mentioned in text, converted to rupees when the currency is known */
+const CUR = { '฿': 'THB', '₹': 'INR', 'rs': 'INR', 'rs.': 'INR', 'inr': 'INR', 'thb': 'THB', 'baht': 'THB', 'rupee': 'INR', 'rupees': 'INR', 'us$': 'USD', 'usd': 'USD', 'dollar': 'USD', 'dollars': 'USD', '€': 'EUR', 'eur': 'EUR', 'euro': 'EUR', 'euros': 'EUR', '£': 'GBP', 'gbp': 'GBP', '¥': 'JPY', 'yen': 'JPY', 'rp': 'IDR', 'idr': 'IDR', 'rupiah': 'IDR', 'rm': 'MYR', 'myr': 'MYR', 'ringgit': 'MYR', 's$': 'SGD', 'sgd': 'SGD', 'aed': 'AED', 'dirham': 'AED', 'dirhams': 'AED', 'lkr': 'LKR', 'npr': 'NPR', 'vnd': 'VND', '₫': 'VND', 'dong': 'VND', '₩': 'KRW', 'krw': 'KRW', 'won': 'KRW', '₱': 'PHP', 'php': 'PHP', 'peso': 'PHP', 'pesos': 'PHP' };
+const FARE_RE = /(฿|₹|US\$|S\$|\$|€|£|¥|₫|₩|₱|\b(?:Rs\.?|INR|THB|USD|EUR|GBP|IDR|Rp|RM|MYR|SGD|AED|LKR|NPR|VND|KRW|PHP)(?=\s?\d))\s?(\d(?:[\d,]*\d)?(?:\.\d+)?)(?:\s?(?:-|–|to)\s?(\d(?:[\d,]*\d)?(?:\.\d+)?))?|(\d(?:[\d,]*\d)?(?:\.\d+)?)(?:\s?(?:-|–|to)\s?(\d(?:[\d,]*\d)?(?:\.\d+)?))?\s?(baht|rupees?|rupiah|ringgit|dong|yen|euros?|dollars?|dirhams?|won|pesos?|THB|INR|USD|IDR|VND|MYR|LKR|NPR)\b/gi;
+function faresIn(text, localCode) {
+  const out = []; let m;
+  FARE_RE.lastIndex = 0;
+  while ((m = FARE_RE.exec(text)) && out.length < 3) {
+    const sym = (m[1] || m[6] || '').toLowerCase().replace(/\s/g, '');
+    let code = CUR[sym] || (sym.length === 3 ? sym.toUpperCase() : null);
+    if (sym === '$' && localCode && localCode !== 'USD' && ['SGD', 'AUD', 'NZD', 'HKD', 'CAD', 'TWD'].includes(localCode)) code = localCode;
+    const a = parseFloat((m[2] || m[4] || '0').replace(/,/g, ''));
+    const bRaw = m[3] || m[5];
+    const b = bRaw ? parseFloat(bRaw.replace(/,/g, '')) : null;
+    if (a > 0) out.push({ raw: m[0].trim(), code, a, b });
+  }
+  return out;
+}
+function toInr(code, amt) {
+  if (!code || amt == null) return null;
+  if (code === 'INR') return amt;
+  const r = RATES && RATES.rates && RATES.rates[code];
+  return r ? amt / r : null;
+}
+function fareLabel(f) {
+  const lo = toInr(f.code, f.a), hi = f.b != null ? toInr(f.code, f.b) : null;
+  if (lo == null || f.code === 'INR') return f.raw;
+  return f.raw + ' (about ₹' + fmt(lo) + (hi != null ? ' to ₹' + fmt(hi) : '') + ')';
+}
+
+async function fetchVoyage(stop) {
+  const parsed = await wvFind(stop);
+  const title = parsed.title;
+  const tops = (parsed.sections || []).filter((s) => String(s.toclevel) === '1');
+  const want = {};
+  tops.forEach((s) => { Object.keys(WANT).forEach((k) => { if (!want[k] && WANT[k].test(s.line)) want[k] = s.index; }); });
+  const keys = Object.keys(want);
+  const htmls = await Promise.allSettled(keys.map((k) => getJSON(WV + '&action=parse&prop=text&disablelimitreport=1&disableeditsection=1&page=' + enc(title) + '&section=' + want[k], 20000)));
+  const out = { title, url: 'https://en.wikivoyage.org/wiki/' + enc(title.replace(/ /g, '_')), see: [], do: [], eat: [], sleep: [], getin: [], modes: [], safe: [], understand: [], image: '', intro: '' };
+  htmls.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || !r.value.parse) return;
+    const d = cleanDoc(r.value.parse.text || '');
+    const k = keys[i];
+    if (k === 'getaround') out.modes = extractModes(d);
+    else if (k === 'getin') out.getin = paragraphs(d, 4).concat(headingBlocks(d).filter((b) => /^by\s/i.test(b.title)).map((b) => b.title + ': ' + b.text.slice(0, 300))).slice(0, 6);
+    else if (k === 'safe' || k === 'understand') out[k] = paragraphs(d, 3);
+    else if (k === 'cities' || k === 'other') out.see = out.see.concat(listItems(d, 10));
+    else out[k] = (out[k] || []).concat(listItems(d, 14));
+  });
+  try {
+    const q = await getJSON(WV + '&action=query&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=900&exintro=1&explaintext=1&exsentences=3&titles=' + enc(title));
+    const pg = q.query && q.query.pages && q.query.pages[0];
+    if (pg) { out.image = (pg.thumbnail && pg.thumbnail.source) || ''; out.intro = (pg.extract || '').trim(); }
+  } catch (e) {}
+  return out;
+}
+
+/* ---------- photos (Wikimedia Commons) ---------- */
+async function commonsPhoto(q) {
+  const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&generator=search&gsrnamespace=6&gsrlimit=5&prop=imageinfo&iiprop=url&iiurlwidth=480&gsrsearch=' + enc(q + ' filetype:bitmap');
+  const j = await getJSON(u);
+  const pages = ((j.query && j.query.pages) || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+  const p = pages.find((x) => x.imageinfo && x.imageinfo[0] && /\.(jpe?g|png|webp)$/i.test(x.imageinfo[0].url));
+  return p ? { src: p.imageinfo[0].thumburl || p.imageinfo[0].url, page: p.imageinfo[0].descriptionurl } : null;
+}
+async function photoFor(mode, place) {
+  const k = mode + '|' + place;
+  if (k in mem.photos) return mem.photos[k];
+  mem.photos[k] = undefined;
+  let p = null;
+  try { p = await commonsPhoto(mode + ' ' + place); } catch (e) {}
+  if (!p) { try { p = await commonsPhoto(mode); } catch (e) {} }
+  mem.photos[k] = p;
+  return p;
+}
+
+/* ---------- climate and weather (Open-Meteo) ---------- */
+async function fetchClimate(geo) {
+  const y = new Date().getFullYear() - 1;
+  const j = await getJSON('https://archive-api.open-meteo.com/v1/archive?latitude=' + geo.lat + '&longitude=' + geo.lng + '&start_date=' + y + '-01-01&end_date=' + y + '-12-31&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto', 25000);
+  const d = j.daily || {};
+  const months = Array.from({ length: 12 }, () => ({ tmax: 0, tmin: 0, rainDays: 0, days: 0 }));
+  (d.time || []).forEach((t, i) => {
+    const m = months[+t.slice(5, 7) - 1];
+    if (d.temperature_2m_max[i] == null) return;
+    m.tmax += d.temperature_2m_max[i]; m.tmin += d.temperature_2m_min[i]; m.days++;
+    if ((d.precipitation_sum[i] || 0) >= 1) m.rainDays++;
+  });
+  return { year: y, months: months.map((m) => ({ tmax: m.days ? Math.round(m.tmax / m.days) : null, tmin: m.days ? Math.round(m.tmin / m.days) : null, rain: m.days ? Math.round(m.rainDays / m.days * 100) : null })) };
+}
+function wxScore(tmax, rain) {
+  const target = { cool: 21, warm: 27, hot: 32 }[S.settings.wtemp];
+  const tol = { low: 25, mid: 45, high: 70 }[S.settings.wrain];
+  if (tmax == null) return null;
+  return clamp(Math.round(100 - Math.abs(tmax - target) * 7 - Math.max(0, rain - tol) * 1.1), 0, 100);
+}
+function verdict(score) { return score == null ? ['No data', 'plain'] : score >= 75 ? ['Great fit', ''] : score >= 50 ? ['Okay', 'warn'] : ['Poor fit', 'bad']; }
+async function rangeWeather(geo, from, to) {
+  const key = geo.lat + ',' + geo.lng + '|' + from + '|' + to;
+  if (mem.wx[key]) return mem.wx[key];
+  const ahead = (parseIso(to) - parseIso(todayIso())) / DAY;
+  let days = [];
+  if (ahead <= 15 && (parseIso(from) - parseIso(todayIso())) / DAY >= 0) {
+    const j = await getJSON('https://api.open-meteo.com/v1/forecast?latitude=' + geo.lat + '&longitude=' + geo.lng + '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&start_date=' + from + '&end_date=' + to);
+    const d = j.daily || {};
+    days = (d.time || []).map((t, i) => ({ date: t, tmax: Math.round(d.temperature_2m_max[i]), tmin: Math.round(d.temperature_2m_min[i]), rain: d.precipitation_probability_max ? d.precipitation_probability_max[i] : null, kind: 'Forecast' }));
+  } else {
+    const yNow = new Date().getFullYear();
+    const span = parseIso(to).getFullYear() - parseIso(from).getFullYear();
+    const years = [1, 2, 3].map((k) => yNow - k - span);
+    const shift = (s, y) => y + s.slice(4).replace('-02-29', '-02-28');
+    const res = await Promise.allSettled(years.map((y) => getJSON('https://archive-api.open-meteo.com/v1/archive?latitude=' + geo.lat + '&longitude=' + geo.lng + '&start_date=' + shift(from, y) + '&end_date=' + shift(to, y + span) + '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto', 20000)));
+    const acc = {};
+    res.forEach((r) => {
+      if (r.status !== 'fulfilled') return;
+      const d = r.value.daily || {};
+      (d.time || []).forEach((t, i) => {
+        const md = t.slice(5);
+        const a = acc[md] || (acc[md] = { tx: 0, tn: 0, wet: 0, n: 0 });
+        if (d.temperature_2m_max[i] == null) return;
+        a.tx += d.temperature_2m_max[i]; a.tn += d.temperature_2m_min[i]; a.n++;
+        if ((d.precipitation_sum[i] || 0) >= 1) a.wet++;
+      });
+    });
+    for (let s = from; s <= to; s = addDays(s, 1)) {
+      const a = acc[s.slice(5)];
+      days.push(a && a.n ? { date: s, tmax: Math.round(a.tx / a.n), tmin: Math.round(a.tn / a.n), rain: Math.round(a.wet / a.n * 100), kind: 'Typical for this date (last ' + a.n + ' years)' } : { date: s, tmax: null, tmin: null, rain: null, kind: 'No data' });
+    }
+  }
+  mem.wx[key] = days;
+  return days;
+}
+
+/* ---------- money ---------- */
+async function ensureRates() {
+  if (RATES && Date.now() - RATES.at < 12 * 3600 * 1000) return RATES;
+  try {
+    const cached = JSON.parse(localStorage.getItem('tripdesk.rates') || 'null');
+    if (cached && Date.now() - cached.at < 12 * 3600 * 1000) { RATES = cached; return RATES; }
+  } catch (e) {}
+  const j = await getJSON('https://open.er-api.com/v6/latest/INR');
+  if (!j.rates) throw new Error('No rates');
+  RATES = { at: Date.now(), rates: j.rates, updated: j.time_last_update_utc || '' };
+  try { localStorage.setItem('tripdesk.rates', JSON.stringify(RATES)); } catch (e) {}
+  return RATES;
+}
+async function fetchCurrency(cc) {
+  const j = await getJSON('https://restcountries.com/v3.1/alpha/' + enc(cc) + '?fields=currencies,name');
+  const o = Array.isArray(j) ? j[0] : j;
+  const code = Object.keys((o && o.currencies) || {})[0];
+  if (!code) throw new Error('No currency');
+  return { code, name: o.currencies[code].name, symbol: o.currencies[code].symbol || code, country: o.name && o.name.common };
+}
+
+/* ---------- visa (Indian passport, from Wikipedia) ---------- */
+async function ensureVisaTable() {
+  if (V && Date.now() - V.at < 7 * DAY) return V;
+  const j = await getJSON('https://en.wikipedia.org/w/api.php?action=parse&page=Visa_requirements_for_Indian_citizens&prop=text&format=json&formatversion=2&origin=*&redirects=1', 30000);
+  const d = cleanDoc((j.parse && j.parse.text) || '');
+  const rows = {};
+  d.querySelectorAll('table.wikitable tr').forEach((tr) => {
+    const c = [...tr.children].map(txt);
+    if (c.length < 2 || tr.querySelector('th:nth-child(2)') && !tr.querySelector('td')) return;
+    const country = c[0].replace(/\[.*?\]/g, '').trim();
+    if (!country || country.length > 60) return;
+    const k = norm(country);
+    if (!rows[k]) rows[k] = { country, req: c[1].slice(0, 160), stay: (c[2] || '').slice(0, 80), notes: (c[3] || '').slice(0, 320) };
+  });
+  if (Object.keys(rows).length < 20) throw new Error('Could not read the visa table');
+  V = { at: Date.now(), rows };
+  try { localStorage.setItem(LSV, JSON.stringify(V)); } catch (e) {}
+  return V;
+}
+function visaFor(country) {
+  if (!V || !country) return null;
+  const k = norm(country);
+  if (V.rows[k]) return V.rows[k];
+  const alias = { 'united states': 'united states of america', 'uk': 'united kingdom', 'czechia': 'czech republic', 'turkiye': 'turkey', 'south korea': 'korea south', 'vietnam': 'viet nam' };
+  if (alias[k] && V.rows[alias[k]]) return V.rows[alias[k]];
+  const hit = Object.keys(V.rows).find((r) => r.startsWith(k) || k.startsWith(r));
+  return hit ? V.rows[hit] : null;
+}
+
+/* ---------- news (Bing News RSS through your proxy) ---------- */
+async function fetchNews(place) {
+  if (!S.settings.proxy) throw new Error('Add a proxy URL in Settings to load news');
+  const rss = 'https://www.bing.com/news/search?q=' + enc(place + ' travel OR tourists OR advisory') + '&format=rss&mkt=en-IN';
+  const xml = await getText(S.settings.proxy + enc(rss), 15000);
+  const d = new DOMParser().parseFromString(xml, 'text/xml');
+  const cutoff = Date.now() - 60 * DAY;
+  return [...d.querySelectorAll('item')].map((it) => ({
+    title: txt(it.querySelector('title')), link: txt(it.querySelector('link')), date: txt(it.querySelector('pubDate')),
+    source: txt(it.getElementsByTagName('News:Source')[0] || it.querySelector('source'))
+  })).filter((x) => x.title && (!x.date || Date.parse(x.date) > cutoff)).slice(0, 6);
+}
+
+/* ---------- research orchestration ---------- */
+function rs(key) { return R[key] || (R[key] = { err: {}, at: {} }); }
+function isBusy(key, src) { return !!(busy[key] && busy[key][src]); }
+async function task(key, src, fn) {
+  busy[key] = busy[key] || {};
+  if (busy[key][src]) return;
+  busy[key][src] = true; render();
+  const r = rs(key);
+  try { r[src] = await fn(); r.err[src] = ''; r.at[src] = Date.now(); }
+  catch (e) { r.err[src] = e.message || String(e); }
+  finally { busy[key][src] = false; save(); render(); }
+}
+async function researchStop(stop, force) {
+  const r = rs(stop.key);
+  if (!stop.geo) {
+    await task(stop.key, 'geo', async () => {
+      const res = await geocode(stop.name);
+      if (!res.length) throw new Error('Place not found. Try adding the country, for example "Kandy, Sri Lanka".');
+      r.alts = res.slice(0, 6);
+      return res[0];
+    });
+    const g = r.geo;
+    if (!g) return;
+    S.trip.stops.forEach((s) => { if (s.key === stop.key) s.geo = g; });
+    save();
+  }
+  const s = S.trip.stops.find((x) => x.key === stop.key) || stop;
+  const jobs = [];
+  if (force || !r.voyage) jobs.push(task(s.key, 'voyage', () => fetchVoyage(s)));
+  if (force || !r.climate) jobs.push(task(s.key, 'climate', () => fetchClimate(s.geo)));
+  if (s.geo.cc && s.geo.cc !== S.settings.home.cc && (force || !r.cur)) jobs.push(task(s.key, 'cur', () => fetchCurrency(s.geo.cc)));
+  await Promise.all(jobs);
+}
+async function researchAll(force) {
+  const p = [ensureRates().catch(() => {})];
+  if (isIndianPassport() && S.trip.stops.some((s) => s.geo && s.geo.cc && s.geo.cc !== 'IN')) p.push(ensureVisaTable().catch(() => {}));
+  for (const s of S.trip.stops) p.push(researchStop(s, force));
+  await Promise.all(p);
+  render();
+}
+function isIndianPassport() { return /^india/i.test(S.settings.passport.trim()); }
+
+/* ---------- route maths ---------- */
+function homePt() { const hm = S.settings.home; return { key: 'home', name: hm.name, lat: hm.lat, lng: hm.lng, cc: hm.cc }; }
+function stopPt(s) { return s.geo ? { key: s.key, name: shortName(s), lat: s.geo.lat, lng: s.geo.lng, cc: s.geo.cc } : null; }
+function shortName(s) { return s.name.split(',')[0].trim(); }
+function stopDates() {
+  const out = []; let d = S.trip.start;
+  S.trip.stops.forEach((s) => { out.push({ from: d, to: addDays(d, s.nights - 1), out: addDays(d, s.nights) }); d = addDays(d, s.nights); });
+  return out;
+}
+function totalNights() { return S.trip.stops.reduce((a, s) => a + s.nights, 0); }
+function legOptions(a, b) {
+  const gc = hav(a, b), road = Math.max(10, Math.round(gc * 1.3 / 10) * 10);
+  const same = a.cc && b.cc && a.cc === b.cc;
+  const india = same && a.cc === 'IN';
+  const opts = [];
+  if (same && road < 3500) {
+    opts.push({ m: 'train', label: india ? 'Train (3AC)' : 'Train', hrs: road / 55, fare: Math.round(road * (india ? 1.5 : 2.2) / 50) * 50 });
+    opts.push({ m: 'bus', label: india ? 'AC sleeper bus' : 'Bus', hrs: road / 42, fare: Math.round(road * (india ? 1.6 : 2) / 50) * 50 });
+  }
+  if (gc > 300 || !same) opts.push({ m: 'flight', label: 'Flight', hrs: 1.5 + gc / 700, fare: Math.round(((same ? 3200 : 6000) + gc * (same ? 2.2 : 4)) / 100) * 100 });
+  if (!opts.length) opts.push({ m: 'road', label: 'Taxi or bus', hrs: road / 40, fare: Math.round(road * 12 / 50) * 50 });
+  return { gc, road, same, india, opts };
+}
+function legs() {
+  const pts = [homePt()].concat(S.trip.stops.map(stopPt), [homePt()]);
+  if (pts.some((p) => !p)) return [];
+  const dates = stopDates();
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const o = legOptions(a, b);
+    const key = a.key + '>' + b.key;
+    const want = S.trip.legModes[key];
+    const mode = o.opts.some((x) => x.m === want) ? want : (o.gc > 1200 || !o.same ? 'flight' : o.opts[0].m);
+    const sel = o.opts.find((x) => x.m === mode) || o.opts[0];
+    const date = i === 0 ? S.trip.start : dates[i - 1].out;
+    out.push(Object.assign({ key, a, b, mode, sel, date, cheap: Math.min(...o.opts.map((x) => x.fare)), fast: Math.min(...o.opts.map((x) => x.hrs)) }, o));
+  }
+  return out;
+}
+function legLinks(l) {
+  const A = l.a.name, B = l.b.name;
+  const links = [['Rome2Rio (all options)', 'https://www.rome2rio.com/map/' + enc(A) + '/' + enc(B)]];
+  if (l.mode === 'train') {
+    if (l.india) links.unshift(['IRCTC', 'https://www.irctc.co.in/nget/train-search']);
+    links.push(['Trains on Google', 'https://www.google.com/search?q=' + enc('trains from ' + A + ' to ' + B)]);
+  } else if (l.mode === 'bus') {
+    if (l.india) links.unshift(['redBus', 'https://www.redbus.in/bus-tickets/' + slug(A) + '-to-' + slug(B)]);
+    links.push(['Buses on Google', 'https://www.google.com/search?q=' + enc('bus from ' + A + ' to ' + B)]);
+  } else if (l.mode === 'flight') {
+    links.unshift(['Google Flights', 'https://www.google.com/travel/flights?q=' + enc('Flights from ' + A + ' to ' + B + ' on ' + l.date)]);
+    links.push(['Skyscanner', 'https://www.skyscanner.co.in/'], ['MakeMyTrip', 'https://www.makemytrip.com/flights/']);
+  }
+  return links;
+}
+function bestOrder() {
+  const st = S.trip.stops;
+  if (st.length < 2) return set((s) => { s.banner = 'Add at least two places to find a better order.'; });
+  if (st.some((s) => !s.geo)) return set((s) => { s.banner = 'Research the places first so I know where they are.'; });
+  if (st.length > 7) return set((s) => { s.banner = 'Best order works for up to 7 places.'; });
+  const home = homePt();
+  const total = (arr) => { const p = [home].concat(arr.map(stopPt), [home]); let t = 0; for (let i = 0; i < p.length - 1; i++) t += hav(p[i], p[i + 1]); return t * 1.3; };
+  let best = null, bestT = Infinity;
+  const perm = (rest, cur) => {
+    if (!rest.length) { const t = total(cur); if (t < bestT - 0.001) { bestT = t; best = cur; } return; }
+    rest.forEach((x, i) => perm(rest.slice(0, i).concat(rest.slice(i + 1)), cur.concat([x])));
+  };
+  perm(st, []);
+  const now = total(st);
+  set((s) => {
+    if (bestT >= now - 5) { s.banner = 'Your order is already the shortest loop from home and back.'; return; }
+    s.trip.stops = best; s.trip.swaps = {};
+    s.banner = 'Re-ordered: ' + best.map(shortName).join(', ') + '. Saves about ' + fmt(now - bestT) + ' km. Legs, costs and days re-planned.';
   });
 }
 
-function params(refresh) {
-  const stops = parseStops($('dest').value);
+/* ---------- costs (estimates the user can edit) ---------- */
+const RATE_CARD = {
+  IN: { stay: [1800, 3500, 8000], food: [1000, 1800, 3500], local: [500, 800, 1500], act: [400, 900, 2000] },
+  XX: { stay: [2500, 5500, 12000], food: [1500, 3000, 6000], local: [700, 1200, 2500], act: [700, 1500, 3000] }
+};
+function tierIdx() { return { budget: 0, comfort: 1, premium: 2 }[S.settings.budget]; }
+function stopRates(s) {
+  const card = s.geo && s.geo.cc === 'IN' ? RATE_CARD.IN : RATE_CARD.XX;
+  const o = S.trip.over[s.key] || {};
+  const t = tierIdx();
+  const mul = S.trip.travellers <= 2 ? 1 : S.trip.travellers / 2;
   return {
-    action: 'section', refresh: !!refresh, stops,
-    dest: stops ? stops.map((s) => s.name).join(' > ') : $('dest').value.trim(), from: $('from').value.trim(), passport: $('passport').value.trim(),
-    start: $('start').value, days: Number($('days').value) || 6, budget: $('budget').value, food: $('food').value,
-    interests: $('interests').value.split(',').map((s) => s.trim()).filter(Boolean), free: $('free').checked, travellers: 2
+    stay: o.stay != null ? o.stay : Math.round(card.stay[t] * Math.ceil(S.trip.travellers / 2)),
+    food: o.food != null ? o.food : Math.round(card.food[t] * mul),
+    local: Math.round(card.local[t] * mul), act: Math.round(card.act[t] * mul)
   };
 }
-
-const RENDER = {
-  overview(d) {
-    const out = [];
-    if (d.window) out.push(el('div', {}, [el('span', { class: 'chip' }, 'Best window'), ' ', (d.window.start || '?') + ' to ' + (d.window.end || '?'), el('div', { class: 'small mu' }, d.window.why || '')]));
-    if (d.bestTime) out.push(el('div', {}, [el('span', { class: 'chip' }, 'Verdict: ' + (d.bestTime.verdict || '?')), el('div', { class: 'small mu' }, d.bestTime.note || ''), el('div', { class: 'small' }, 'Months Jan to Dec: ' + (d.bestTime.monthScores || []).join(' ')) ]));
-    if (d.weather) out.push(el('div', {}, [kv('Summary', d.weather.summary), kv('High / low', d.weather.highC + '° / ' + d.weather.lowC + '°'), kv('Rain chance', (d.weather.rainChancePct ?? '?') + '%'), kv('Humidity', (d.weather.humidityPct ?? '?') + '%')]));
-    if ((d.events || []).length) out.push(el('div', {}, [el('b', {}, 'Events'), el('ul', {}, d.events.map((e) => el('li', {}, e.name + ' (' + e.dates + '): ' + e.effect)))]));
-    if ((d.advisories || []).length) out.push(el('div', {}, [el('b', {}, 'Advisories'), el('ul', {}, d.advisories.map((a) => el('li', {}, [el('span', { class: 'chip ' + (a.level === 'warning' ? 'bad' : a.level === 'caution' ? 'warn' : '') }, a.level || 'info'), ' ' + a.text + ' ', a.sourceUrl ? link(a.sourceUrl, 'source') : null])))]));
-    return out;
-  },
-  visa(d) {
-    return [
-      kv('Entry type', d.entryType), kv('Stay allowed', d.stayDays === null ? null : d.stayDays + ' days'), kv('Passport validity', d.passportValidityRule),
-      kv('Fee', d.fee && d.fee.amount !== null ? d.fee.amount + ' ' + (d.fee.currency || '') : null), kv('Processing', d.processing),
-      el('div', {}, [el('b', {}, 'Requirements'), list(d.requirements)]),
-      d.applyUrl ? el('div', {}, ['Apply: ', link(d.applyUrl, d.applyUrl)]) : null,
-      el('div', {}, [el('b', {}, 'Official sources'), el('ul', {}, (d.officialSources || []).map((s) => el('li', {}, [link(s.url, s.title || s.url), s.updated ? ' · updated ' + s.updated : ''])))]),
-      el('div', {}, [el('span', { class: 'chip ' + (d.confidence === 'high' ? '' : 'warn') }, 'Confidence: ' + (d.confidence || '?')), d.notes ? el('div', { class: 'small mu' }, d.notes) : null])
-    ];
-  },
-  food(d) {
-    return [
-      el('ul', {}, (d.mustTry || []).map((f) => el('li', {}, [el('b', {}, f.dish), ' (' + (f.type || '?') + ') at ' + (f.where || '?') + ', ' + inr(f.priceInr) + '. ' + (f.why || '')]))),
-      (d.areas || []).length ? el('div', {}, [el('b', {}, 'Areas to eat'), el('ul', {}, d.areas.map((a) => el('li', {}, a.name + ': ' + a.why)))]) : null,
-      (d.tips || []).length ? el('div', {}, [el('b', {}, 'Tips'), list(d.tips)]) : null,
-      d.notes ? el('div', { class: 'small mu' }, d.notes) : null
-    ];
-  },
-  itinerary(d) {
-    const out = (d.days || []).map((day) => el('div', {}, [
-      el('div', {}, [el('span', { class: 'chip' }, 'Day ' + day.day), ' ', el('b', {}, day.title || ''), day.date ? el('span', { class: 'small mu' }, ' · ' + day.date) : null]),
-      el('ul', {}, (day.items || []).map((it) => el('li', {}, [(it.time ? it.time + ' · ' : '') + it.title + (it.area ? ' (' + it.area + ')' : '') + ' · ' + inr(it.priceInr) + (it.kind === 'ticket' && it.ticketSearch ? ' · ticket: ' + it.ticketSearch : ''), it.note ? el('div', { class: 'small mu' }, it.note) : null])))
-    ]));
-    if (d.estimateInr) out.push(kv('Estimate for activities', inr(d.estimateInr.activities)));
-    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
-    return out;
-  },
-  routes(d) {
-    const out = (d.legs || []).map((l) => el('div', {}, [
-      el('div', {}, [el('b', {}, (l.from || '?') + ' to ' + (l.to || '?')), l.distanceKm ? el('span', { class: 'small mu' }, ' · about ' + l.distanceKm + ' km') : null]),
-      el('ul', {}, (l.options || []).map((o) => el('li', {}, [
-        el('span', { class: 'chip' }, o.mode || '?'), ' ' + (o.name || '') + (o.number ? ' (' + o.number + ')' : '') +
-        (o.departs ? ' · dep ' + o.departs : '') + (o.arrives ? ' · arr ' + o.arrives : '') +
-        (o.durationHrs ? ' · ' + o.durationHrs + ' h' : '') + ' · ' + inr(o.farePerPersonInr) + ' each' + (o.classOrType ? ' · ' + o.classOrType : ''),
-        o.note ? el('div', { class: 'small mu' }, o.note) : null
-      ]))),
-      el('div', { class: 'small' }, ['Suggested: ' + (l.recommended || '?') + '. ' + (l.why || '') + ' ', l.bookUrls && l.bookUrls.train ? link(l.bookUrls.train, 'IRCTC') : null, ' ', l.bookUrls && l.bookUrls.bus ? link(l.bookUrls.bus, 'redBus') : null])
-    ]));
-    if (d.suggestedOrder) out.push(el('div', {}, [el('b', {}, 'Suggested order: '), (d.suggestedOrder.stops || []).join(' > '), el('div', { class: 'small mu' }, d.suggestedOrder.why || '')]));
-    out.push(el('div', { class: 'small mu' }, 'Seat availability is not visible here. Check and book on IRCTC, redBus or the operator.'));
-    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
-    return out;
-  },
-  local(d) {
-    const out = (d.places || []).map((p) => el('div', {}, [
-      el('b', {}, p.place || ''),
-      el('ul', {}, (p.options || []).map((o) => el('li', {}, [
-        el('span', { class: 'chip' }, o.kind || 'other'), ' ', el('b', {}, o.name || ''), ' · ' + (o.fareInr || 'fare not found'),
-        el('div', { class: 'small' }, o.what || ''), o.tip ? el('div', { class: 'small mu' }, 'Tip: ' + o.tip) : null,
-        o.photoQuery ? el('div', { class: 'small mu' }, 'Photo search: ' + o.photoQuery) : null
-      ])))
-    ]));
-    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
-    return out;
-  }
-};
-
-function card(key, title) {
-  const body = el('div', { class: 'card' }, []);
-  const status = el('span', { class: 'chip warn' }, 'Waiting');
-  const rerun = el('button', { class: 'btn2', type: 'button' }, 'Re-run');
-  rerun.style.display = 'none';
-  body.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px' }, [el('h2', {}, title), status]));
-  const content = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
-  body.appendChild(content); body.appendChild(rerun);
-  $('results').appendChild(body);
-  return { key, status, content, rerun };
+function costs() {
+  const c = { transit: 0, stay: 0, food: 0, local: 0, act: 0, visa: 0 };
+  S.trip.stops.forEach((s) => { const r = stopRates(s); c.stay += r.stay * s.nights; c.food += r.food * s.nights; c.local += r.local * s.nights; c.act += r.act * s.nights; });
+  legs().forEach((l) => { c.transit += l.sel.fare * S.trip.travellers; });
+  c.visa = Number(S.trip.over.visaTotal) || 0;
+  c.total = c.transit + c.stay + c.food + c.local + c.act + c.visa;
+  return c;
 }
 
-async function runSection(c, refresh) {
-  c.status.className = 'chip warn'; c.status.textContent = 'Researching…'; c.rerun.style.display = 'none';
-  c.content.replaceChildren();
-  const t0 = Date.now();
+/* ---------- itinerary (rule-based) ---------- */
+function dietOk(text) {
+  const veg = /\b(vegetarian|vegan|pure veg|veg\b|thali|dosa|idli|sadya|paneer|tofu)\b/i.test(text);
+  const non = /\b(chicken|fish|seafood|pork|beef|mutton|meat|prawns?|crab|lamb|duck|biryani|kebab|steak)\b/i.test(text);
+  const f = S.settings.food;
+  if (f === 'veg') return veg || !non;
+  if (f === 'nonveg') return non || !veg;
+  return true;
+}
+function foodTag(text) {
+  const veg = /\b(vegetarian|vegan|pure veg|veg\b)\b/i.test(text);
+  const non = /\b(chicken|fish|seafood|pork|beef|mutton|meat|prawns?|crab|lamb|duck|biryani|kebab|steak)\b/i.test(text);
+  return veg && !non ? ['Veg', ''] : non && !veg ? ['Non-veg', 'warn'] : ['Veg or non-veg', 'plain'];
+}
+function itinerary() {
+  const L = legs(), dates = stopDates(), days = [];
+  S.trip.stops.forEach((s, i) => {
+    const v = (R[s.key] && R[s.key].voyage) || {};
+    const pool = (v.see || []).concat(v.do || []);
+    const eats = (v.eat || []).filter((e) => dietOk(e.text));
+    for (let d = 0; d < s.nights; d++) {
+      const items = [];
+      if (d === 0 && L[i]) items.push({ tag: 'Travel', title: L[i].a.name + ' to ' + L[i].b.name + ' by ' + L[i].sel.label.toLowerCase() + ', about ' + fmtH(L[i].sel.hrs), price: L[i].sel.fare * S.trip.travellers });
+      const slots = d === 0 ? 1 : 2;
+      for (let k = 0; k < slots; k++) {
+        const sk = s.key + '|' + d + '|' + k;
+        if (pool.length) {
+          const idx = (d * 2 + k + (S.trip.swaps[sk] || 0)) % pool.length;
+          items.push({ tag: 'See', title: pool[idx].name, text: pool[idx].text, price: null, swapKey: sk, canSwap: pool.length > 2, place: shortName(s) });
+        } else if (k === 0) items.push({ tag: 'See', title: 'Explore ' + shortName(s), text: 'No sights listed on Wikivoyage. Tap "Check my plan" for ideas.', place: shortName(s) });
+      }
+      if (eats.length) { const e = eats[d % eats.length]; items.push({ tag: 'Eat', title: e.name, text: e.text, price: null, place: shortName(s) }); }
+      if (i === S.trip.stops.length - 1 && d === s.nights - 1 && L[i + 1]) items.push({ tag: 'Travel', title: L[i + 1].a.name + ' to ' + L[i + 1].b.name + ' by ' + L[i + 1].sel.label.toLowerCase() + ', about ' + fmtH(L[i + 1].sel.hrs), price: L[i + 1].sel.fare * S.trip.travellers });
+      days.push({ date: addDays(dates[i].from, d), stop: s, title: d === 0 ? 'Reach ' + shortName(s) : shortName(s) + ', day ' + (d + 1), items });
+    }
+  });
+  return days;
+}
+
+/* ---------- ready-made plans ---------- */
+const PRESETS = [
+  { name: 'South India circuit', note: 'Kanyakumari, Kerala and Tirupati in one loop.', stops: [['Kanyakumari', 2], ['Kochi', 2], ['Munnar', 2], ['Tirupati', 2]] },
+  { name: 'Thailand classic', note: 'City, old north and islands.', stops: [['Bangkok', 3], ['Chiang Mai', 3], ['Phuket', 3]] },
+  { name: 'Rajasthan royal', note: 'Pink, blue and lake cities.', stops: [['Jaipur', 2], ['Jodhpur', 2], ['Udaipur', 3]] },
+  { name: 'Bali slow trip', note: 'Rice terraces and beaches.', stops: [['Ubud', 3], ['Seminyak', 3]] },
+  { name: 'Himachal hills', note: 'Colonial hill town and mountain valley.', stops: [['Shimla', 2], ['Manali', 4]] },
+  { name: 'Sri Lanka loop', note: 'Hill country, tea and south coast.', stops: [['Kandy, Sri Lanka', 2], ['Ella, Sri Lanka', 2], ['Galle', 2]] }
+];
+function loadPreset(p) {
+  set((s) => {
+    s.trip.stops = p.stops.map(([n, k]) => ({ name: n, key: keyOf(n), nights: k, geo: null }));
+    s.trip.legModes = {}; s.trip.swaps = {}; s.trip.name = p.name;
+    s.banner = 'Loaded "' + p.name + '". Researching now. Change anything and the plan follows.';
+    s.tab = 'plan';
+  });
+  researchAll(false);
+}
+
+/* ---------- stops editing ---------- */
+function addStop(name) {
+  name = String(name || '').trim();
+  if (!name) return;
+  if (S.trip.stops.length >= 7) return set((s) => { s.banner = 'Up to 7 places per trip.'; });
+  const key = keyOf(name);
+  if (S.trip.stops.some((x) => x.key === key)) return set((s) => { s.banner = name + ' is already in the trip.'; });
+  set((s) => { s.trip.stops.push({ name, key, nights: 2, geo: R[key] && R[key].geo || null }); s.banner = ''; });
+  researchStop(S.trip.stops[S.trip.stops.length - 1], false).then(render);
+}
+
+/* ---------- Claude plan check (only paid call) ---------- */
+function planSummary() {
+  const L = legs(), dates = stopDates(), c = costs();
+  return {
+    passport: S.settings.passport, home: S.settings.home.name, travellers: S.trip.travellers, budgetStyle: S.settings.budget, food: S.settings.food,
+    start: S.trip.start, end: addDays(S.trip.start, totalNights()),
+    stops: S.trip.stops.map((s, i) => ({
+      name: s.name, matched: s.geo ? [s.geo.name, s.geo.admin1, s.geo.country].filter(Boolean).join(', ') : null, nights: s.nights, from: dates[i].from, to: dates[i].out,
+      visa: s.geo && s.geo.cc !== S.settings.home.cc && visaFor(s.geo.country) ? visaFor(s.geo.country) : null,
+      localTransport: ((R[s.key] && R[s.key].voyage && R[s.key].voyage.modes) || []).map((m) => m.name + ': ' + faresIn(m.text).map((f) => f.raw).join(', ')).slice(0, 6)
+    })),
+    legs: L.map((l) => ({ from: l.a.name, to: l.b.name, date: l.date, mode: l.mode, hours: Math.round(l.sel.hrs * 10) / 10, farePerPersonInrEstimate: l.sel.fare })),
+    days: itinerary().slice(0, 21).map((d) => ({ date: d.date, place: shortName(d.stop), plan: d.items.map((x) => x.title) })),
+    costEstimateInr: { transport: c.transit, stay: c.stay, food: c.food, localTransport: c.local, activities: c.act, visa: c.visa, total: c.total }
+  };
+}
+async function checkPlan() {
+  const st = S.settings;
+  if (!st.backend || !st.passcode) return set((s) => { s.check = { error: 'Add your backend URL and passcode in Settings first.' }; });
+  if (!S.trip.stops.length) return;
+  S.check = { loading: true }; render();
   try {
-    const r = (await call(Object.assign(params(refresh), { section: c.key }))).result;
-    const secs = Math.round((Date.now() - t0) / 1000);
-    c.status.className = 'chip'; c.status.textContent = (r.cached ? 'Cached' : 'Done in ' + secs + 's') + (r.searches ? ' · ' + r.searches + ' searches' : '');
-    RENDER[c.key](r.data).forEach((n) => n && c.content.appendChild(n));
-    if ((r.sources || []).length) c.content.appendChild(el('details', {}, [el('summary', {}, 'Sources searched (' + r.sources.length + ')'), el('ul', {}, r.sources.map((s) => el('li', {}, link(s.url, s.title))))]));
-    c.content.appendChild(el('details', {}, [el('summary', {}, 'Raw JSON'), el('pre', {}, JSON.stringify(r.data, null, 2))]));
+    const res = await fetch(st.backend, { method: 'POST', body: JSON.stringify({ action: 'verify', passcode: st.passcode, plan: planSummary() }) });
+    const text = await res.text();
+    let j; try { j = JSON.parse(text); } catch (e) { throw new Error('Unexpected reply from the backend.'); }
+    if (!j.ok) throw new Error(j.error || 'Backend error');
+    S.check = Object.assign({ at: Date.now() }, j.result);
+    S.meterLog = (S.meterLog || []).concat([{ at: Date.now(), usd: j.result.usd || 0 }]).slice(-200);
   } catch (e) {
-    c.status.className = 'chip bad'; c.status.textContent = 'Failed';
-    c.content.appendChild(el('div', {}, String(e.message || e)));
+    S.check = { error: e.message || String(e) };
   }
-  c.rerun.style.display = '';
+  save(); render();
+}
+async function pingBackend() {
+  const st = S.settings;
+  try {
+    const res = await fetch(st.backend, { method: 'POST', body: JSON.stringify({ action: 'ping', passcode: st.passcode }) });
+    const j = JSON.parse(await res.text());
+    if (!j.ok) throw new Error(j.error);
+    S.serverMeter = j.meter; S.banner = 'Backend connected.';
+  } catch (e) { S.banner = 'Could not connect: ' + (e.message || e); }
+  save(); render();
+}
+function usdToInr(usd) { const r = RATES && RATES.rates && RATES.rates.USD; return r ? usd / r : null; }
+function money(usd) { const inr = usdToInr(usd); return '$' + usd.toFixed(usd < 1 ? 3 : 2) + (inr != null ? ' (about ₹' + fmt(inr) + ')' : ''); }
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+const TABS = [['plan', 'Plan', '🧭'], ['route', 'Route', '🛤️'], ['trip', 'Trip', '📊'], ['days', 'Days', '📅'], ['weather', 'Weather', '⛅'], ['wallet', 'Wallet', '👛']];
+let renderQueued = false;
+function render() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; renderNow(); });
+}
+function renderNow() {
+  document.documentElement.dataset.theme = S.settings.theme === 'sunset' ? '' : S.settings.theme;
+  const main = document.getElementById('main');
+  const keepScroll = main.dataset.tab === S.tab ? main.scrollTop : 0;
+  main.replaceChildren();
+  const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings }[S.tab] || viewPlan;
+  try { view().forEach((n) => n && main.append(n)); }
+  catch (e) { main.append(h('div', { class: 'card' }, h('h2', {}, 'Something went wrong'), h('div', { class: 'sm' }, String(e && e.message || e)))); console.error(e); }
+  main.dataset.tab = S.tab;
+  main.scrollTop = keepScroll;
+  const nav = document.getElementById('nav');
+  nav.replaceChildren(...TABS.map(([k, l, i]) => h('button', { type: 'button', 'aria-current': S.tab === k ? 'page' : 'false', onclick: () => set((s) => { if (s.tab !== k) s.banner = ''; s.tab = k; }) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, i), l)));
+}
+function go(tab) { set((s) => { s.tab = tab; }); }
+function bannerEl() {
+  if (!S.banner) return null;
+  return h('div', { class: 'banner row', role: 'status' }, h('div', { class: 'grow' }, S.banner), h('button', { type: 'button', class: 'ibtn', style: 'background:transparent;border:0', 'aria-label': 'Dismiss', onclick: () => set((s) => { s.banner = ''; }) }, '×'));
+}
+function empty(msg) {
+  return h('div', { class: 'card' }, h('h2', {}, 'No places yet'), h('div', {}, msg || 'Add a place on the Plan tab, or load a ready-made plan.'), h('button', { type: 'button', class: 'btn', onclick: () => go('plan') }, 'Go to Plan'));
+}
+function srcChips(key) {
+  const r = R[key] || { err: {} };
+  const srcs = [['geo', 'Location'], ['voyage', 'Guide'], ['climate', 'Climate'], ['cur', 'Currency']];
+  return h('div', { class: 'row wrap', style: 'gap:6px' }, srcs.map(([k, l]) => {
+    if (isBusy(key, k)) return h('span', { class: 'chip plain' }, h('span', { class: 'spin', 'aria-hidden': 'true' }), ' ' + l);
+    if (r.err && r.err[k]) return h('span', { class: 'chip bad', title: r.err[k] }, l + ': failed');
+    if (r[k]) return chip(l + ' ✓');
+    return null;
+  }));
 }
 
-$('save').addEventListener('click', async () => {
-  store.set('td_url', $('url').value.trim()); store.set('td_pass', $('pass').value);
-  $('connStatus').textContent = 'Testing…';
+/* ----- Plan ----- */
+function viewPlan() {
+  const st = S.trip.stops;
+  const out = [h('div', {}, h('h1', {}, 'Where to next?'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Add one place or several. Everything is researched live from free sources.'))];
+  out.push(bannerEl());
+  const list = h('div', { class: 'card' }, h('h2', {}, 'Your route'),
+    h('div', { class: 'mu sm' }, [S.settings.home.name].concat(st.map(shortName), [S.settings.home.name]).join(' → ')));
+  st.forEach((s, i) => {
+    const r = R[s.key] || {};
+    const alts = (r.alts || []).filter((a) => a);
+    list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' },
+      h('div', { class: 'row' }, h('span', { class: 'num' }, i + 1),
+        h('div', { class: 'grow' }, h('div', { class: 'b' }, s.name), h('div', { class: 'mu xs' }, s.geo ? [s.geo.admin1, s.geo.country].filter(Boolean).join(', ') : (isBusy(s.key, 'geo') ? 'Finding…' : (r.err && r.err.geo) || 'Not found yet'))),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => set((x) => { const a = x.trip.stops; [a[i - 1], a[i]] = [a[i], a[i - 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↑'),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move later', disabled: i === st.length - 1, onclick: () => set((x) => { const a = x.trip.stops; [a[i + 1], a[i]] = [a[i], a[i + 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↓'),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + s.name, onclick: () => set((x) => { x.trip.stops.splice(i, 1); x.trip.swaps = {}; x.banner = 'Removed ' + shortName(s) + '.'; }) }, '×')),
+      stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'),
+        () => set((x) => { x.trip.stops[i].nights = clamp(s.nights - 1, 1, 21); x.trip.swaps = {}; }),
+        () => set((x) => { x.trip.stops[i].nights = clamp(s.nights + 1, 1, 21); x.trip.swaps = {}; })),
+      alts.length > 1 ? h('div', { class: 'row' }, h('label', { for: 'alt' + i, class: 'xs' }, 'Wrong place?'),
+        h('select', { id: 'alt' + i, class: 'inp', style: 'height:40px', onchange: (e) => { const a = alts[+e.target.value]; set((x) => { x.trip.stops[i].geo = a; R[s.key].geo = a; delete R[s.key].voyage; delete R[s.key].climate; delete R[s.key].cur; }); researchStop(S.trip.stops[i], false); } },
+          alts.map((a, k) => h('option', { value: String(k), selected: s.geo && a.lat === s.geo.lat && a.lng === s.geo.lng ? 'selected' : null }, [a.name, a.admin1, a.country].filter(Boolean).join(', '))))) : null,
+      srcChips(s.key)));
+  });
+  const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', onkeydown: (e) => { if (e.key === 'Enter') { addStop(e.target.value); } } });
+  list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: 'newstop' }, 'Add a place'),
+    h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => addStop(inp.value) }, 'Add'))));
+  if (st.length >= 2) list.append(h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, 'Find the best order'));
+  if (st.length) list.append(h('button', { type: 'button', class: 'btn', onclick: () => researchAll(false) }, 'Research my trip'),
+    h('button', { type: 'button', class: 'btn2', onclick: () => researchAll(true) }, 'Refresh all research'));
+  out.push(list);
+
+  out.push(h('div', { class: 'card' }, h('h2', {}, 'Dates and travellers'),
+    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Free style'), h('div', { class: 'mu sm' }, 'Let the app pick the best month from the climate of your places.')),
+      sw(S.trip.free, 'Free style', () => set((s) => { s.trip.free = !s.trip.free; }))),
+    S.trip.free ? freeStyleBox() : null,
+    h('label', { for: 'start' }, 'Start date'),
+    h('input', { id: 'start', class: 'inp', type: 'date', value: S.trip.start, onchange: (e) => { if (e.target.value) set((s) => { s.trip.start = e.target.value; }); } }),
+    h('div', { class: 'mu sm' }, st.length ? totalNights() + ' nights, back on ' + nice(addDays(S.trip.start, totalNights()), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''),
+    h('label', {}, 'Travellers'),
+    stepper('travellers', S.trip.travellers + (S.trip.travellers === 1 ? ' person' : ' people'), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers - 1, 1, 12); }), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers + 1, 1, 12); })),
+    h('label', {}, 'Budget style'), segs([['budget', 'Budget'], ['comfort', 'Comfort'], ['premium', 'Premium']], S.settings.budget, (v) => set((s) => { s.settings.budget = v; })),
+    h('label', {}, 'Food'), segs([['veg', 'Veg'], ['nonveg', 'Non-veg'], ['both', 'Both']], S.settings.food, (v) => set((s) => { s.settings.food = v; }))));
+
+  out.push(h('div', { class: 'card' }, h('h2', {}, 'Ready-made plans'), h('div', { class: 'mu sm' }, 'Start from a popular route, then change anything.'),
+    PRESETS.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu sm' }, p.note + ' ' + p.stops.reduce((a, x) => a + x[1], 0) + ' nights.')),
+      h('button', { type: 'button', class: 'btn2', onclick: () => loadPreset(p) }, 'Use')))));
+  return out;
+}
+function bestMonths() {
+  const months = Array.from({ length: 12 }, () => ({ score: 0, n: 0 }));
+  S.trip.stops.forEach((s) => {
+    const c = R[s.key] && R[s.key].climate;
+    if (!c) return;
+    c.months.forEach((m, i) => { const sc = wxScore(m.tmax, m.rain); if (sc != null) { months[i].score += sc; months[i].n++; } });
+  });
+  return months.map((m) => (m.n ? Math.round(m.score / m.n) : null));
+}
+function freeStyleBox() {
+  const sc = bestMonths();
+  if (sc.every((x) => x == null)) return h('div', { class: 'warnbox sm' }, 'Research your places first, then I can suggest the best month.');
+  const now = new Date();
+  let bestI = -1, best = -1;
+  for (let k = 1; k <= 12; k++) { const m = (now.getMonth() + k) % 12; if (sc[m] != null && sc[m] > best) { best = sc[m]; bestI = m; } }
+  const yr = now.getFullYear() + (bestI <= now.getMonth() ? 1 : 0);
+  const start = yr + '-' + String(bestI + 1).padStart(2, '0') + '-10';
+  const name = new Date(yr, bestI, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  return h('div', { class: 'banner', style: 'display:flex;flex-direction:column;gap:8px' },
+    h('div', {}, 'Best month for these places and your weather taste: ', h('b', {}, name), ' (score ' + best + '/100).'),
+    h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.trip.start = start; s.banner = 'Dates moved to ' + nice(start) + '. Weather, legs and days re-planned.'; }) }, 'Use ' + nice(start)));
+}
+
+/* ----- Route ----- */
+function viewRoute() {
+  if (!S.trip.stops.length) return [h('h1', {}, 'Route'), empty()];
+  const out = [h('div', {}, h('h1', {}, 'Route'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Getting between places, and getting around each one.')),
+    segs([['legs', 'Between places'], ['local', 'Getting around']], S.rsub, (v) => set((s) => { s.rsub = v; })), bannerEl()];
+  if (S.rsub === 'legs') {
+    const L = legs();
+    if (!L.length) { out.push(h('div', { class: 'card' }, h('div', {}, 'Research your places first so I know where they are.'), h('button', { type: 'button', class: 'btn', onclick: () => researchAll(false) }, 'Research my trip'))); return out; }
+    out.push(h('div', { class: 'card hl' }, h('div', { class: 'b' }, [L[0].a.name].concat(L.map((l) => l.b.name)).join(' → ')),
+      h('div', { class: 'mu sm' }, 'About ' + fmt(L.reduce((a, l) => a + l.road, 0)) + ' km by road in ' + L.length + ' legs.'),
+      S.trip.stops.length > 1 ? h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, 'Find the best order') : null));
+    L.forEach((l) => {
+      out.push(h('div', { class: 'card' },
+        h('div', { class: 'row between' }, h('h2', {}, l.a.name + ' to ' + l.b.name), h('span', { class: 'mu xs' }, nice(l.date))),
+        h('div', { class: 'mu xs' }, 'About ' + fmt(l.road) + ' km by road, ' + fmt(l.gc) + ' km straight'),
+        l.opts.map((o) => {
+          const on = o.m === l.mode;
+          const tag = o.fare === l.cheap && o.hrs === l.fast ? 'Cheapest and fastest' : o.fare === l.cheap ? 'Cheapest' : o.hrs === l.fast ? 'Fastest' : '';
+          return h('button', { type: 'button', class: 'opt', 'aria-pressed': String(on), onclick: () => set((s) => { s.trip.legModes[l.key] = o.m; s.banner = l.a.name + ' to ' + l.b.name + ' now by ' + o.label.toLowerCase() + '. Costs and days re-planned.'; }) },
+            h('span', {}, h('span', { class: 'b' }, o.label), h('br'), h('span', { class: 'mu sm' }, fmtH(o.hrs) + (o.m === 'flight' ? ' flying, plus airport time' : ''))),
+            h('span', { style: 'text-align:right' }, h('span', { class: 'b' }, '₹' + fmt(o.fare) + ' each'), h('br'), tag ? chip(tag) : ''));
+        }),
+        h('div', { class: 'mu xs' }, 'Rough estimate from distance. Check real times and seats on the sites below.'),
+        h('div', { class: 'row wrap' }, legLinks(l).map(([t, u]) => ext(u, t, 'btn2')))));
+    });
+    return out;
+  }
+  // getting around
+  const i = clamp(S.lstop, 0, S.trip.stops.length - 1);
+  const s = S.trip.stops[i];
+  out.push(h('div', { class: 'row wrap' }, S.trip.stops.map((x, k) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(k === i), onclick: () => set((y) => { y.lstop = k; }) }, shortName(x)))));
+  const r = R[s.key] || {};
+  const v = r.voyage;
+  const curCode = r.cur && r.cur.code;
+  out.push(h('h2', { style: 'font-size:20px' }, 'Getting around ' + shortName(s)));
+  if (isBusy(s.key, 'voyage')) out.push(h('div', { class: 'card' }, h('div', {}, h('span', { class: 'spin' }), ' Reading the travel guide…')));
+  else if (!v) out.push(h('div', { class: 'card' }, h('div', {}, (r.err && r.err.voyage) || 'Not researched yet.'), h('button', { type: 'button', class: 'btn', onclick: () => researchStop(s, true) }, 'Research ' + shortName(s))));
+  else if (!v.modes.length) out.push(h('div', { class: 'card' }, h('div', {}, 'The guide has no local transport section for this place.'), ext(v.url, 'Open the guide', 'btn2')));
+  else {
+    v.modes.forEach((m) => {
+      const img = h('div', { class: 'thumb', 'aria-hidden': 'true' }, modeIcon(m.name));
+      const photoKey = m.name + '|' + shortName(s);
+      const ph = mem.photos[photoKey];
+      let credit = null;
+      const thumb = ph ? h('img', { class: 'thumb', src: ph.src, alt: m.name + ' in ' + shortName(s), loading: 'lazy' }) : img;
+      if (ph) credit = ext(ph.page, 'Photo: Wikimedia Commons', 'xs');
+      if (!(photoKey in mem.photos)) photoFor(m.name, shortName(s)).then(() => { if (S.tab === 'route' && S.rsub === 'local') render(); });
+      const fs = faresIn(m.text, curCode);
+      out.push(h('div', { class: 'card' },
+        h('div', { class: 'row', style: 'align-items:flex-start' }, thumb,
+          h('div', { class: 'grow' }, h('div', { class: 'b', style: 'font-size:16px' }, m.name),
+            fs.length ? h('div', { class: 'b', style: 'color:var(--ac)' }, fs.map(fareLabel).join(' · ')) : h('div', { class: 'mu sm' }, 'No fare mentioned in the guide'),
+            credit)),
+        h('div', { class: 'sm' }, m.text.length > 420 ? m.text.slice(0, 420) + '…' : m.text)));
+    });
+    out.push(h('div', { class: 'mu xs' }, 'From ', ext(v.url, 'Wikivoyage'), '. Fares in guides can be a few years old. Rupee amounts use today\'s exchange rate.'));
+  }
+  return out;
+}
+
+/* ----- Trip ----- */
+function viewTrip() {
+  if (!S.trip.stops.length) return [h('h1', {}, 'Trip'), empty()];
+  const c = costs(), n = totalNights();
+  const out = [bannerEl()];
+  out.push(h('div', { class: 'hero' },
+    h('div', { class: 'sm b', style: 'opacity:.85' }, n + ' nights · ' + nice(S.trip.start) + ' to ' + nice(addDays(S.trip.start, n)) + ' · ' + S.trip.travellers + ' travellers · from ' + S.settings.home.name),
+    h('div', { class: 'big' }, S.trip.stops.map(shortName).join(' → ')),
+    h('div', { class: 'row', style: 'align-items:baseline' }, h('div', { class: 'big', style: 'font-size:32px' }, '₹' + fmt(c.total)), h('div', { class: 'sm', style: 'opacity:.85' }, 'estimated total'))));
+
+  // Claude check
+  const ck = S.check;
+  const checkCard = h('div', { class: 'card hl' }, h('div', { class: 'row between' }, h('h2', {}, 'Check my plan with Claude'), chip('Paid', 'warn')),
+    h('div', { class: 'sm' }, 'Everything above is free. When you are happy with the plan, Claude checks it against current sources: visa, trains and flights, closures, fares and costs.'),
+    meterBox(),
+    h('button', { type: 'button', class: 'btn', disabled: ck && ck.loading ? true : null, onclick: checkPlan }, ck && ck.loading ? 'Checking… about a minute' : 'Check my plan'));
+  if (ck && ck.error) checkCard.append(h('div', { class: 'warnbox sm' }, ck.error));
+  if (ck && ck.data) {
+    const d = ck.data;
+    checkCard.append(h('div', { class: 'line' }, h('div', { class: 'row' }, chip(d.verdict === 'good' ? 'Looks good' : d.verdict === 'risky' ? 'Risky' : 'Needs fixes', d.verdict === 'good' ? '' : d.verdict === 'risky' ? 'bad' : 'warn'), h('span', { class: 'mu xs' }, 'Checked ' + new Date(ck.at).toLocaleString('en-GB'))),
+      h('div', { style: 'margin-top:6px' }, d.summary || '')));
+    (d.items || []).forEach((it) => checkCard.append(h('div', { class: 'line' },
+      h('div', { class: 'row' }, chip(it.area || 'other', 'plain'), chip(it.status === 'ok' ? 'OK' : it.status === 'fix' ? 'Fix' : 'Heads-up', it.status === 'ok' ? '' : it.status === 'fix' ? 'bad' : 'warn')),
+      h('div', { style: 'margin-top:6px' }, it.text || ''), it.fix ? h('div', { class: 'b sm' }, 'Fix: ' + it.fix) : null, it.sourceUrl ? ext(it.sourceUrl, 'Source', 'xs') : null)));
+    if (d.costCheck && d.costCheck.note) checkCard.append(h('div', { class: 'line sm' }, h('b', {}, 'Costs: '), d.costCheck.note));
+    if (ck.usd != null) checkCard.append(h('div', { class: 'line sm b' }, 'This check cost ' + money(ck.usd) + ', ' + (ck.searches || 0) + ' web searches.'));
+  }
+  out.push(checkCard);
+
+  // currency
+  const intl = S.trip.stops.filter((s) => s.geo && s.geo.cc && s.geo.cc !== S.settings.home.cc && R[s.key] && R[s.key].cur);
+  const curs = [...new Map(intl.map((s) => [R[s.key].cur.code, R[s.key].cur])).values()];
+  if (curs.length) out.push(currencyCard(curs));
+
+  // budget guard
+  const gap = S.settings.cap - c.total, over = gap < 0;
+  out.push(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'Budget guard'), chip(over ? 'Over by ₹' + fmt(-gap) : '₹' + fmt(gap) + ' to spare', over ? 'warn' : '')),
+    h('div', { class: 'bar' }, h('div', { style: 'width:' + clamp(Math.round(c.total / S.settings.cap * 100), 0, 100) + '%' + (over ? ';background:#E0A100' : '') })),
+    stepper('limit', '₹' + fmt(S.settings.cap), () => set((s) => { s.settings.cap = Math.max(20000, s.settings.cap - 10000); }), () => set((s) => { s.settings.cap += 10000; })),
+    h('div', { class: 'sm' }, over ? 'Try trains or buses instead of flights, a Budget style, or a night fewer somewhere.' : 'Within your limit. Any change updates this bar.')));
+
+  // costs
+  const parts = [['Travel between places', c.transit], ['Stay', c.stay], ['Food', c.food], ['Local transport', c.local], ['Sights and tickets', c.act], ['Visa', c.visa]];
+  const cc = h('div', { class: 'card' }, h('h2', {}, 'Where the money goes'),
+    parts.filter((p) => p[1] > 0 || p[0] === 'Visa').map((p) => h('div', { class: 'kv' }, h('span', {}, p[0]), h('span', {}, '₹' + fmt(p[1])))),
+    h('details', {}, h('summary', {}, 'Edit the estimates'),
+      h('div', { class: 'mu xs' }, 'Per night for your group. Start from the defaults for your budget style, then type real prices as you find them.'),
+      S.trip.stops.map((s) => { const r = stopRates(s); return h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:6px' }, h('div', { class: 'b' }, shortName(s)),
+        h('div', { class: 'row' }, h('label', { for: 'st' + s.key, class: 'grow' }, 'Stay per night'), h('input', { id: 'st' + s.key, class: 'inp', style: 'width:130px', inputmode: 'numeric', value: String(r.stay), onchange: (e) => setOver(s.key, 'stay', e.target.value) })),
+        h('div', { class: 'row' }, h('label', { for: 'fd' + s.key, class: 'grow' }, 'Food per day'), h('input', { id: 'fd' + s.key, class: 'inp', style: 'width:130px', inputmode: 'numeric', value: String(r.food), onchange: (e) => setOver(s.key, 'food', e.target.value) }))); }),
+      intl.length ? h('div', { class: 'line row' }, h('label', { for: 'visaT', class: 'grow' }, 'Visa fees, all travellers'), h('input', { id: 'visaT', class: 'inp', style: 'width:130px', inputmode: 'numeric', value: String(S.trip.over.visaTotal || 0), onchange: (e) => set((x) => { x.trip.over.visaTotal = Number(String(e.target.value).replace(/[^0-9.]/g, '')) || 0; }) })) : null),
+    h('div', { class: 'mu xs' }, 'Estimates, not quotes. Transport uses distance; stay and food use your budget style.'));
+  out.push(cc);
+
+  // best time
+  const sc = bestMonths();
+  if (sc.some((x) => x != null)) {
+    const cur = parseIso(S.trip.start).getMonth();
+    out.push(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'Best time to go'), chip(verdict(sc[cur])[0] + ' in ' + new Date(2000, cur, 1).toLocaleDateString('en-GB', { month: 'short' }), verdict(sc[cur])[1])),
+      h('div', { class: 'months' }, sc.map((v, i) => h('div', {}, h('span', { class: i === cur ? 'on' : '', style: 'height:' + (v == null ? 2 : 6 + v * 0.55) + 'px' }), 'JFMAMJJASOND'[i]))),
+      h('div', { class: 'mu xs' }, 'Scored against your weather taste (Weather tab), using last year\'s daily weather for all your places.')));
+  }
+
+  // stay safe + intro
+  S.trip.stops.forEach((s) => {
+    const v = R[s.key] && R[s.key].voyage;
+    if (!v) return;
+    const tips = (v.safe || []).slice(0, 2);
+    out.push(h('div', { class: 'card' },
+      v.image ? h('img', { class: 'photo', src: v.image, alt: shortName(s), loading: 'lazy' }) : null,
+      h('h2', {}, shortName(s)), v.intro ? h('div', { class: 'sm' }, v.intro) : null,
+      tips.length ? h('details', {}, h('summary', {}, 'Stay safe'), tips.map((t) => h('p', { class: 'sm' }, t))) : null,
+      h('div', { class: 'row wrap' }, ext('https://www.youtube.com/results?search_query=' + enc(shortName(s) + ' travel vlog ' + new Date().getFullYear()) + '&sp=CAI%253D', 'Latest vlogs', 'btn2'), ext(v.url, 'Full guide', 'btn2'), newsButton(s))));
+    const nw = mem.news[s.key];
+    if (nw && nw.items) out.push(h('div', { class: 'card' }, h('h2', {}, 'News: ' + shortName(s)), nw.items.length ? nw.items.map((x) => h('div', { class: 'line' }, ext(x.link, x.title), h('div', { class: 'mu xs' }, [x.source, x.date ? new Date(x.date).toLocaleDateString('en-GB') : ''].filter(Boolean).join(' · ')))) : h('div', { class: 'mu sm' }, 'No travel news in the last 60 days.')));
+    if (nw && nw.error) out.push(h('div', { class: 'warnbox sm' }, 'News for ' + shortName(s) + ': ' + nw.error));
+  });
+  out.push(h('div', { class: 'mu xs' }, 'Free sources: Wikivoyage, Wikipedia, Open-Meteo, Wikimedia Commons, REST Countries, open.er-api.com, Bing News.'));
+  return out;
+}
+function setOver(key, f, val) { const n = Number(String(val).replace(/[^0-9.]/g, '')); set((s) => { s.trip.over[key] = s.trip.over[key] || {}; s.trip.over[key][f] = isNaN(n) ? null : n; }); }
+function newsButton(s) {
+  const nw = mem.news[s.key];
+  if (nw && nw.loading) return h('span', { class: 'btn2' }, h('span', { class: 'spin' }), ' News');
+  return h('button', { type: 'button', class: 'btn2', onclick: async () => { mem.news[s.key] = { loading: true }; render(); try { mem.news[s.key] = { items: await fetchNews(shortName(s)) }; } catch (e) { mem.news[s.key] = { error: e.message }; } render(); } }, nw && nw.items ? 'Refresh news' : 'Load news');
+}
+function meterBox() {
+  const month = new Date().toISOString().slice(0, 7);
+  const local = (S.meterLog || []).filter((x) => new Date(x.at).toISOString().slice(0, 7) === month);
+  const localUsd = local.reduce((a, x) => a + (x.usd || 0), 0);
+  const sm = (S.check && S.check.meter) || S.serverMeter;
+  return h('div', { style: 'background:var(--sf2);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:4px' },
+    h('div', { class: 'b sm' }, 'Usage meter'),
+    h('div', { class: 'kv sm' }, h('span', {}, 'Checks this month'), h('span', {}, String(local.length))),
+    h('div', { class: 'kv sm' }, h('span', {}, 'Spent this month'), h('span', {}, money(sm ? sm.monthUsd : localUsd))),
+    sm ? h('div', { class: 'kv sm' }, h('span', {}, 'Calls today'), h('span', {}, sm.callsToday + ' of ' + sm.dailyCap)) : null);
+}
+function currencyCard(curs) {
+  const card = h('div', { class: 'card' }, h('h2', {}, 'Currency'));
+  if (!RATES) { card.append(h('div', { class: 'sm' }, 'Loading exchange rates…')); ensureRates().then(render).catch(() => {}); return card; }
+  const amt = S.inr || '10000';
+  const val = Number(String(amt).replace(/[^0-9.]/g, '')) || 0;
+  card.append(h('label', { for: 'inr' }, 'Rupees'), h('input', { id: 'inr', class: 'inp', inputmode: 'decimal', value: amt, onchange: (e) => set((s) => { s.inr = e.target.value; }) }));
+  curs.forEach((c) => {
+    const r = RATES.rates[c.code];
+    card.append(h('div', { class: 'kv' }, h('span', {}, c.name + ' (' + c.code + ')'), h('span', {}, r ? c.symbol + ' ' + Math.round(val * r).toLocaleString('en-US') : 'rate not found')));
+    if (r) card.append(h('div', { class: 'mu xs' }, '1 ' + c.code + ' = ₹' + (1 / r).toFixed(r > 1 ? 3 : 2) + ' · ₹100 = ' + c.symbol + ' ' + (100 * r).toFixed(r > 10 ? 0 : 2)));
+  });
+  card.append(h('ul', { class: 'clean sm' }, h('li', {}, 'Use a zero-markup forex card or a card with no foreign transaction fee.'), h('li', {}, 'Withdraw from bank ATMs and decline "pay in rupees" (dynamic conversion).'), h('li', {}, 'Carry small notes for local transport and street food.')),
+    h('div', { class: 'mu xs' }, 'Rates from open.er-api.com' + (RATES.updated ? ', updated ' + RATES.updated : '') + '.'));
+  return card;
+}
+
+/* ----- Days ----- */
+function viewDays() {
+  if (!S.trip.stops.length) return [h('h1', {}, 'Days'), empty()];
+  const out = [h('h1', {}, 'Your ' + totalNights() + ' days'), segs([['plan', 'Itinerary'], ['stay', 'Stay'], ['food', 'Food'], ['tix', 'Tickets']], S.dsub, (v) => set((s) => { s.dsub = v; })), bannerEl()];
+  if (S.dsub === 'plan') {
+    out.push(h('div', { class: 'mu sm' }, 'Built from the travel guide. Tap Swap to change a sight. Change nights or order on the Plan tab.'));
+    itinerary().forEach((d, di) => {
+      out.push(h('div', { class: 'card' }, h('div', { class: 'row' }, chip('Day ' + (di + 1)), h('h2', { class: 'grow' }, d.title), h('span', { class: 'mu xs' }, nice(d.date))),
+        d.items.map((it) => h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:6px' },
+          h('div', { class: 'row' }, chip(it.tag, it.tag === 'Travel' ? 'plain' : it.tag === 'Eat' ? 'warn' : ''), it.price ? h('span', { class: 'mu sm' }, '₹' + fmt(it.price) + ' for the group') : null),
+          h('div', { class: 'b' }, it.title), it.text ? h('div', { class: 'sm mu' }, it.text.length > 220 ? it.text.slice(0, 220) + '…' : it.text) : null,
+          h('div', { class: 'row wrap' },
+            it.canSwap ? h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.trip.swaps[it.swapKey] = (s.trip.swaps[it.swapKey] || 0) + 1; s.banner = 'Swapped a sight on day ' + (di + 1) + '.'; }) }, 'Swap') : null,
+            it.tag !== 'Travel' && it.place ? ext('https://www.google.com/maps/search/?api=1&query=' + enc(it.title + ', ' + it.place), 'Map', 'btn2') : null)))));
+    });
+  } else if (S.dsub === 'stay') {
+    const dates = stopDates();
+    S.trip.stops.forEach((s, i) => {
+      const v = R[s.key] && R[s.key].voyage;
+      const sleep = (v && v.sleep) || [];
+      out.push(h('div', { class: 'card' }, h('h2', {}, 'Stay in ' + shortName(s)), h('div', { class: 'mu sm' }, s.nights + ' nights · ' + nice(dates[i].from) + ' to ' + nice(dates[i].out)),
+        sleep.length ? sleep.slice(0, 8).map((x) => h('div', { class: 'line' }, h('div', { class: 'b' }, x.name), x.price ? h('div', { class: 'sm', style: 'color:var(--ac);font-weight:700' }, x.price) : null, h('div', { class: 'sm mu' }, x.text.length > 200 ? x.text.slice(0, 200) + '…' : x.text))) : h('div', { class: 'mu sm' }, v ? 'No places to stay listed in the guide.' : 'Not researched yet.'),
+        h('div', { class: 'row wrap' },
+          ext('https://www.booking.com/searchresults.html?ss=' + enc(s.name) + '&checkin=' + dates[i].from + '&checkout=' + dates[i].out + '&group_adults=' + S.trip.travellers + '&no_rooms=1', 'Booking.com prices', 'btn2'),
+          ext('https://www.google.com/travel/search?q=' + enc('hotels in ' + s.name), 'Google Hotels', 'btn2'),
+          ext('https://www.makemytrip.com/hotels/', 'MakeMyTrip', 'btn2'))));
+    });
+    out.push(h('div', { class: 'mu xs' }, 'Guide prices can be dated. Live prices open on the booking sites.'));
+  } else if (S.dsub === 'food') {
+    out.push(segs([['veg', 'Veg'], ['nonveg', 'Non-veg'], ['both', 'Both']], S.settings.food, (v) => set((s) => { s.settings.food = v; })));
+    S.trip.stops.forEach((s) => {
+      const v = R[s.key] && R[s.key].voyage;
+      const eats = ((v && v.eat) || []).filter((e) => dietOk(e.text));
+      out.push(h('div', { class: 'card' }, h('h2', {}, 'Eat in ' + shortName(s)),
+        eats.length ? eats.slice(0, 10).map((x) => { const t = foodTag(x.text); return h('div', { class: 'line' }, h('div', { class: 'row between' }, h('div', { class: 'b' }, x.name), chip(t[0], t[1])), x.price ? h('div', { class: 'sm b', style: 'color:var(--ac)' }, x.price) : null, h('div', { class: 'sm mu' }, x.text.length > 200 ? x.text.slice(0, 200) + '…' : x.text)); }) : h('div', { class: 'mu sm' }, v ? 'Nothing matching in the guide.' : 'Not researched yet.')));
+    });
+    out.push(h('div', { class: 'mu xs' }, 'Veg or non-veg is guessed from the description. Check the menu.'));
+  } else {
+    S.trip.stops.forEach((s) => {
+      const v = R[s.key] && R[s.key].voyage;
+      const dos = ((v && v.do) || []).concat(((v && v.see) || []).filter((x) => /ticket|entry|admission|fee|tour/i.test(x.text)));
+      out.push(h('div', { class: 'card' }, h('h2', {}, 'Things to book in ' + shortName(s)),
+        dos.length ? dos.slice(0, 10).map((x) => h('div', { class: 'line row', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.price ? h('div', { class: 'sm b', style: 'color:var(--ac)' }, x.price) : null),
+          ext('https://www.google.com/search?q=' + enc('klook ' + x.name + ' ' + shortName(s)), 'Find on Klook', 'btn2'))) : h('div', { class: 'mu sm' }, v ? 'No bookable activities in the guide.' : 'Not researched yet.'),
+        ext('https://www.google.com/search?q=' + enc('klook ' + shortName(s) + ' tickets'), 'All Klook tickets for ' + shortName(s), 'btn2')));
+    });
+    out.push(h('div', { class: 'mu xs' }, 'Booking emails can be found later from the Wallet tab.'));
+  }
+  return out;
+}
+
+/* ----- Weather ----- */
+function viewWeather() {
+  const out = [h('div', {}, h('h1', {}, 'Weather'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Forecast within two weeks, typical weather beyond that.')),
+    h('div', { class: 'card' }, h('h2', {}, 'What you like'),
+      h('label', {}, 'Temperature'), segs([['cool', 'Cooler'], ['warm', 'Warm'], ['hot', 'Hot']], S.settings.wtemp, (v) => set((s) => { s.settings.wtemp = v; })),
+      h('label', {}, 'Rain I can put up with'), segs([['low', 'Little'], ['mid', 'Some'], ['high', 'Plenty']], S.settings.wrain, (v) => set((s) => { s.settings.wrain = v; })))];
+  if (!S.trip.stops.length) { out.push(empty()); return out; }
+  const geoStops = S.trip.stops.filter((s) => s.geo);
+  if (!geoStops.length) { out.push(h('div', { class: 'card' }, 'Research your places first.')); return out; }
+  // any date check
+  const wi = clamp(S.wstop, 0, geoStops.length - 1), ws = geoStops[wi];
+  const wd = S.wdate || S.trip.start;
+  const card = h('div', { class: 'card' }, h('h2', {}, 'Check any date'),
+    h('div', { class: 'row wrap' }, geoStops.map((s, k) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(k === wi), onclick: () => set((x) => { x.wstop = k; }) }, shortName(s)))),
+    h('label', { for: 'wdate' }, 'Date'), h('input', { id: 'wdate', class: 'inp', type: 'date', value: wd, onchange: (e) => { if (e.target.value) set((s) => { s.wdate = e.target.value; }); } }));
+  const wk = ws.geo.lat + ',' + ws.geo.lng + '|' + wd + '|' + wd;
+  const one = mem.wx[wk];
+  if (!one) { card.append(h('div', {}, h('span', { class: 'spin' }), ' Loading…')); rangeWeather(ws.geo, wd, wd).then(render).catch((e) => { mem.wx[wk] = [{ date: wd, err: e.message }]; render(); }); }
+  else {
+    const x = one[0] || {};
+    if (x.err) card.append(h('div', { class: 'warnbox sm' }, x.err));
+    else {
+      const sc = wxScore(x.tmax, x.rain), vd = verdict(sc);
+      card.append(h('div', { class: 'row between' }, h('div', { class: 'b' }, nice(wd, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })), chip(vd[0], vd[1])),
+        h('div', { class: 'row' }, statBox('High / low', x.tmax == null ? '–' : x.tmax + '° / ' + x.tmin + '°'), statBox('Rain chance', x.rain == null ? '–' : x.rain + '%')),
+        h('div', { class: 'mu xs' }, x.kind + '. Open-Meteo.'));
+    }
+  }
+  out.push(card);
+  // trip strip
+  const dates = stopDates();
+  const strip = h('div', { class: 'card' }, h('h2', {}, 'Your trip, day by day'));
+  let pending = false;
+  S.trip.stops.forEach((s, i) => {
+    if (!s.geo) return;
+    const k = s.geo.lat + ',' + s.geo.lng + '|' + dates[i].from + '|' + dates[i].to;
+    const days = mem.wx[k];
+    if (!days) { pending = true; rangeWeather(s.geo, dates[i].from, dates[i].to).then(render).catch((e) => { mem.wx[k] = []; render(); }); return; }
+    days.forEach((x) => { const vd = verdict(wxScore(x.tmax, x.rain)); strip.append(h('div', { class: 'kv' }, h('span', {}, h('b', {}, nice(x.date)), h('br'), h('span', { class: 'mu xs' }, shortName(s))), h('span', { class: 'sm', style: 'font-weight:500' }, (x.tmax == null ? '–' : x.tmax + '° / ' + x.tmin + '° · ' + x.rain + '% rain') + ' ', chip(vd[0], vd[1])))); });
+  });
+  if (pending) strip.append(h('div', { class: 'sm' }, h('span', { class: 'spin' }), ' Loading weather…'));
+  out.push(strip);
+  // packing
+  const all = Object.values(mem.wx).flat().filter((x) => x && x.tmax != null);
+  if (all.length) {
+    const maxT = Math.max(...all.map((x) => x.tmax)), minT = Math.min(...all.map((x) => x.tmin)), wet = Math.max(...all.map((x) => x.rain || 0));
+    const pk = [];
+    if (wet >= 40) pk.push('Compact umbrella or light rain jacket', 'Quick-dry clothes');
+    if (maxT >= 30) pk.push('Sunscreen, cap and sunglasses', 'Light cotton clothes');
+    if (minT <= 15) pk.push('Warm layer or fleece');
+    if (minT <= 5) pk.push('Thermals, gloves and a warm jacket');
+    pk.push('Power bank and plug adapter', 'Copies of ID and tickets');
+    out.push(h('div', { class: 'card' }, h('h2', {}, 'Pack for the weather'), pk.map((p) => checkRow('pack:' + p, p))));
+  }
+  return out;
+}
+function statBox(k, v) { return h('div', { class: 'grow', style: 'background:var(--sf2);border-radius:12px;padding:10px 12px' }, h('div', { class: 'mu xs' }, k), h('div', { class: 'b', style: 'font-size:18px' }, v)); }
+function checkRow(key, label) {
+  const on = !!S.docs[key];
+  return h('button', { type: 'button', class: 'check', 'aria-pressed': String(on), onclick: () => set((s) => { s.docs[key] = !on; }) }, h('span', { class: 'box', 'aria-hidden': 'true' }, on ? '✓' : ''), h('span', {}, label));
+}
+
+/* ----- Wallet ----- */
+function viewWallet() {
+  const out = [h('h1', {}, 'Wallet'), segs([['exp', 'Expenses'], ['docs', 'Documents'], ['visa', 'Visa']], S.wsub, (v) => set((s) => { s.wsub = v; }))];
+  if (S.wsub === 'exp') return out.concat(expensesView());
+  if (S.wsub === 'docs') return out.concat(docsView());
+  return out.concat(visaView());
+}
+function expensesView() {
+  const n = S.people.length, spent = S.expenses.reduce((a, e) => a + e.amt, 0), share = n ? spent / n : 0;
+  const paid = S.people.map((p, i) => S.expenses.filter((e) => e.by === i).reduce((a, e) => a + e.amt, 0));
+  const net = paid.map((p) => p - share);
+  const dv = net.map((v, i) => ({ i, v: -v })).filter((x) => x.v > 0.5).sort((a, b) => b.v - a.v);
+  const cv = net.map((v, i) => ({ i, v })).filter((x) => x.v > 0.5).sort((a, b) => b.v - a.v);
+  const settle = []; let a = 0, b = 0;
+  while (a < dv.length && b < cv.length) { const m = Math.min(dv[a].v, cv[b].v); settle.push(S.people[dv[a].i] + ' pays ' + S.people[cv[b].i] + ' ₹' + fmt(m)); dv[a].v -= m; cv[b].v -= m; if (dv[a].v < 0.5) a++; if (cv[b].v < 0.5) b++; }
+  const desc = h('input', { id: 'edesc', class: 'inp', type: 'text', placeholder: 'Dinner, taxi, tickets…' });
+  const amt = h('input', { id: 'eamt', class: 'inp', inputmode: 'decimal', placeholder: '0' });
+  const person = h('input', { id: 'eperson', class: 'inp', type: 'text', placeholder: 'Name' });
+  return [
+    h('div', { class: 'card' }, h('label', {}, 'Spent so far'), h('div', { class: 'b', style: 'font-family:Sora;font-size:30px' }, '₹' + fmt(spent)), h('div', { class: 'mu sm' }, 'Each person\'s share: ₹' + fmt(share)),
+      S.people.map((p, i) => h('div', { class: 'kv' }, h('span', {}, h('b', {}, p), h('br'), h('span', { class: 'mu xs' }, 'Paid ₹' + fmt(paid[i]))), h('span', {}, chip(Math.abs(net[i]) < 1 ? 'Settled' : net[i] > 0 ? 'Gets back ₹' + fmt(net[i]) : 'Owes ₹' + fmt(-net[i]), net[i] < -0.5 ? 'warn' : '')))),
+      h('div', { style: 'background:var(--sf2);border-radius:12px;padding:12px' }, h('label', {}, 'To settle up'), (settle.length ? settle : ['Everyone is settled up.']).map((t) => h('div', { class: 'b' }, t)))),
+    h('div', { class: 'card' }, h('h2', {}, 'Add an expense'), h('label', { for: 'edesc' }, 'What was it'), desc, h('label', { for: 'eamt' }, 'Amount in rupees'), amt,
+      h('label', {}, 'Who paid'), h('div', { class: 'row wrap' }, S.people.map((p, i) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(S.payer === i), onclick: () => set((s) => { s.payer = i; }) }, p))),
+      h('button', { type: 'button', class: 'btn', onclick: () => { const v = Number(String(amt.value).replace(/[^0-9.]/g, '')); if (!v) return; set((s) => { s.expenses.push({ id: Date.now(), desc: desc.value.trim() || 'Expense', amt: v, by: s.payer }); }); } }, 'Add and split equally')),
+    S.expenses.length ? h('div', { class: 'card' }, S.expenses.map((e) => h('div', { class: 'row line' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, e.desc), h('div', { class: 'mu xs' }, 'Paid by ' + (S.people[e.by] || '?'))), h('div', { class: 'b' }, '₹' + fmt(e.amt)),
+      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Delete expense', onclick: () => set((s) => { s.expenses = s.expenses.filter((x) => x.id !== e.id); }) }, '×')))) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Who is splitting'), h('div', { class: 'row' }, person, h('button', { type: 'button', class: 'btn2', onclick: () => { const nm = person.value.trim(); if (nm && !S.people.includes(nm)) set((s) => { s.people.push(nm); }); } }, 'Add')),
+      h('div', { class: 'mu xs' }, 'Saved on this phone only.'))
+  ];
+}
+function docsView() {
+  const places = S.trip.stops.map(shortName);
+  const q = (words) => 'https://mail.google.com/mail/u/0/#search/' + enc(words);
+  const pl = places.length ? ' (' + places.map((p) => '"' + p + '"').join(' OR ') + ')' : '';
+  const rows = [
+    ['Flight tickets', 'from:(indigo OR airindia OR vistara OR spicejet OR akasaair OR makemytrip OR goibibo OR cleartrip OR ixigo) (ticket OR "booking confirmed" OR itinerary)' + pl],
+    ['Train tickets', 'from:(irctc) (ERS OR "e-ticket" OR booked)'],
+    ['Bus tickets', 'from:(redbus OR abhibus) ticket'],
+    ['Hotel bookings', 'from:(agoda OR booking.com OR makemytrip OR goibibo OR airbnb OR oyo) (confirmation OR booking OR reservation)' + pl],
+    ['Tours and tickets', 'from:(klook OR getyourguide OR viator) (voucher OR booking)'],
+    ['Travel insurance', '(insurance) (travel) (policy) newer_than:1y'],
+    ['Visa', '(visa OR e-visa OR evisa) (approved OR grant OR application) newer_than:1y']
+  ];
+  return [h('div', { class: 'card' }, h('h2', {}, 'Before you go'),
+      ['Passport or photo ID for every traveller', 'Tickets for every leg', 'Hotel booking for every place', 'Travel insurance', 'Visa or e-visa, if needed', 'Forex card or cash'].map((d) => checkRow('doc:' + d, d))),
+    h('div', { class: 'card' }, h('h2', {}, 'Find in Gmail'), h('div', { class: 'mu sm' }, 'Opens a Gmail search for each kind of booking. Nothing is read by this app.'),
+      rows.map(([t, qq]) => h('div', { class: 'line row' }, h('div', { class: 'grow b' }, t), ext(q(qq), 'Search', 'btn2'))))];
+}
+function visaView() {
+  const intl = S.trip.stops.filter((s) => s.geo && s.geo.cc && s.geo.cc !== S.settings.home.cc);
+  const out = [];
+  if (!S.trip.stops.length) return [empty()];
+  if (!intl.length) return [h('div', { class: 'card' }, h('h2', {}, 'No visa needed'), h('div', {}, 'All your places are in ' + (S.settings.home.country || 'your home country') + '. Carry a government photo ID; trains check ID on board.'))];
+  if (!isIndianPassport()) return [h('div', { class: 'card' }, h('h2', {}, 'Visa'), h('div', {}, 'Automatic visa lookup works for Indian passports. For ' + S.settings.passport + ', use the official links below.'), intl.map((s) => ext('https://www.google.com/search?q=' + enc(s.geo.country + ' visa ' + S.settings.passport + ' citizens official'), s.geo.country + ' visa rules', 'btn2')))];
+  if (!V) {
+    if (mem.visaErr) return [h('div', { class: 'card' }, h('div', { class: 'warnbox' }, 'Could not load visa rules: ' + mem.visaErr), h('button', { type: 'button', class: 'btn2', onclick: () => { mem.visaErr = ''; render(); } }, 'Try again'))];
+    if (!mem.visaLoading) { mem.visaLoading = true; ensureVisaTable().catch((e) => { mem.visaErr = e.message; }).finally(() => { mem.visaLoading = false; render(); }); }
+    return [h('div', { class: 'card' }, h('div', {}, h('span', { class: 'spin' }), ' Loading visa rules…'))];
+  }
+  const seen = new Set();
+  intl.forEach((s) => {
+    if (seen.has(s.geo.country)) return; seen.add(s.geo.country);
+    const v = visaFor(s.geo.country);
+    out.push(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, s.geo.country), chip('Indian passport', 'plain')),
+      v ? [h('div', { class: 'kv' }, h('span', {}, 'Entry'), h('span', {}, v.req)), v.stay ? h('div', { class: 'kv' }, h('span', {}, 'Stay allowed'), h('span', {}, v.stay)) : null, v.notes ? h('div', { class: 'sm mu' }, v.notes) : null]
+        : h('div', {}, 'Not found in the table. Check the official site.'),
+      h('div', { class: 'warnbox sm' }, 'From Wikipedia, which can lag behind rule changes. Confirm on the official government site before booking.'),
+      h('div', { class: 'row wrap' }, ext('https://en.wikipedia.org/wiki/Visa_requirements_for_Indian_citizens', 'Wikipedia table', 'btn2'), ext('https://www.google.com/search?q=' + enc(s.geo.country + ' official visa Indian citizens e-visa'), 'Official site search', 'btn2'))));
+  });
+  out.push(h('div', { class: 'card' }, h('h2', {}, 'Passport'), checkRow('doc:valid6', 'Passport valid for 6+ months after return'), checkRow('doc:pages', 'At least 2 blank pages')));
+  return out;
+}
+
+/* ----- Settings ----- */
+function viewSettings() {
+  const st = S.settings;
+  const home = h('input', { id: 'home', class: 'inp', value: st.home.name, onchange: async (e) => {
+    const v = e.target.value.trim(); if (!v) return;
+    try { const r = await geocode(v); if (!r.length) throw new Error('not found'); set((s) => { s.settings.home = { name: r[0].name, lat: r[0].lat, lng: r[0].lng, cc: r[0].cc, country: r[0].country }; s.banner = 'Home set to ' + r[0].name + ', ' + r[0].country + '.'; }); }
+    catch (err) { set((s) => { s.banner = 'Could not find ' + v + '.'; }); }
+  } });
+  const fileIn = h('input', { type: 'file', accept: 'application/json', class: 'visually-hidden', id: 'imp', onchange: (e) => importPlans(e.target.files[0]) });
+  return [
+    h('button', { type: 'button', class: 'btn2', style: 'align-self:flex-start;border:0', onclick: () => go(S.back || 'plan') }, '‹ Back'),
+    h('h1', {}, 'Settings'), bannerEl(),
+    h('div', { class: 'card' }, h('h2', {}, 'Saved plans'), h('div', { class: 'mu sm' }, 'Each plan keeps its places, dates and choices on this phone.'),
+      S.plans.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu xs' }, p.meta)),
+        h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.trip = structuredClone(p.trip); s.tab = 'trip'; s.banner = 'Opened "' + p.name + '".'; }) }, 'Open'),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Delete plan', onclick: () => set((s) => { s.plans = s.plans.filter((x) => x.id !== p.id); }) }, '×'))),
+      h('button', { type: 'button', class: 'btn2', disabled: S.trip.stops.length ? null : true, onclick: savePlan }, 'Save current plan'),
+      h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: exportPlans }, 'Export to file'), h('label', { for: 'imp', class: 'btn2', style: 'font-size:15px' }, 'Import from file'), fileIn)),
+    h('div', { class: 'card' }, h('h2', {}, 'Appearance'), segs([['sunset', 'Sunset'], ['midnight', 'Midnight'], ['daylight', 'Daylight']], st.theme, (v) => set((s) => { s.settings.theme = v; }))),
+    h('div', { class: 'card' }, h('h2', {}, 'My defaults'),
+      h('label', { for: 'home' }, 'Home city'), home, h('div', { class: 'mu xs' }, [st.home.name, st.home.country].filter(Boolean).join(', ')),
+      h('label', { for: 'pp' }, 'Passport country'), h('input', { id: 'pp', class: 'inp', value: st.passport, onchange: (e) => set((s) => { s.settings.passport = e.target.value.trim() || 'India'; }) })),
+    h('div', { class: 'card' }, h('h2', {}, 'Claude plan check'), h('div', { class: 'mu sm' }, 'Optional. Only used when you tap "Check my plan" on the Trip tab.'),
+      h('label', { for: 'be' }, 'Apps Script web app URL'), h('input', { id: 'be', class: 'inp', value: st.backend, placeholder: 'https://script.google.com/macros/s/…/exec', onchange: (e) => set((s) => { s.settings.backend = e.target.value.trim(); }) }),
+      h('label', { for: 'pc' }, 'Passcode'), h('input', { id: 'pc', class: 'inp', type: 'password', value: st.passcode, autocomplete: 'off', onchange: (e) => set((s) => { s.settings.passcode = e.target.value; }) }),
+      h('button', { type: 'button', class: 'btn2', onclick: pingBackend }, 'Test connection'), meterBox()),
+    h('div', { class: 'card' }, h('h2', {}, 'News proxy'), h('div', { class: 'mu sm' }, 'News feeds need a proxy, like your Brief app. Leave as is to use your existing Worker.'),
+      h('label', { for: 'px' }, 'Proxy URL'), h('input', { id: 'px', class: 'inp', value: st.proxy, onchange: (e) => set((s) => { s.settings.proxy = e.target.value.trim(); }) })),
+    h('div', { class: 'card' }, h('h2', {}, 'Data'), h('button', { type: 'button', class: 'btn2', onclick: () => { R = {}; V = null; try { localStorage.removeItem(LSV); } catch (e) {} set((s) => { s.banner = 'Research cache cleared. Tap "Research my trip" to fetch again.'; }); } }, 'Clear research cache'),
+      h('div', { class: 'mu xs' }, 'Free sources: Wikivoyage and Wikipedia (CC BY-SA), Wikimedia Commons, Open-Meteo, REST Countries, open.er-api.com, Bing News.'))
+  ];
+}
+function savePlan() {
+  const n = totalNights();
+  const name = S.trip.name || S.trip.stops.map(shortName).join(', ');
+  set((s) => {
+    s.plans = s.plans.filter((p) => p.name !== name).concat([{ id: Date.now(), name, meta: n + ' nights from ' + nice(s.trip.start) + ' · saved ' + new Date().toLocaleDateString('en-GB'), trip: structuredClone(s.trip) }]);
+    s.banner = 'Saved "' + name + '".';
+  });
+}
+function exportPlans() {
+  const blob = new Blob([JSON.stringify({ app: 'trip-desk', version: 1, plans: S.plans, current: S.trip }, null, 2)], { type: 'application/json' });
+  const a = h('a', { href: URL.createObjectURL(blob), download: 'trip-desk-plans.json' });
+  document.body.append(a); a.click(); a.remove();
+}
+async function importPlans(file) {
+  if (!file) return;
   try {
-    const r = await call({ action: 'ping' });
-    $('connStatus').textContent = 'Connected. Claude calls used today: ' + r.usageToday + '.';
-  } catch (e) { $('connStatus').textContent = 'Could not connect: ' + (e.message || e); }
-});
+    const j = JSON.parse(await file.text());
+    if (!j || !Array.isArray(j.plans)) throw new Error('Not a Trip Desk file');
+    set((s) => { const names = new Set(s.plans.map((p) => p.name)); j.plans.forEach((p) => { if (p && p.trip && !names.has(p.name)) s.plans.push(p); }); s.banner = 'Imported ' + j.plans.length + ' plans.'; });
+  } catch (e) { set((s) => { s.banner = 'Import failed: ' + e.message; }); }
+}
 
-$('go').addEventListener('click', async () => {
-  const p = params(false);
-  if (!p.dest) { $('runStatus').textContent = 'Please enter a destination.'; return; }
-  if (!p.free && !p.start) { $('runStatus').textContent = 'Pick a start date, or turn on Free style.'; return; }
-  $('runStatus').textContent = 'Running one section at a time. Each takes about 20 to 60 seconds.';
-  $('results').replaceChildren();
-  const cards = SECTIONS.map((s) => { const c = card(s[0], s[1]); c.rerun.addEventListener('click', () => runSection(c, true)); return c; });
-  $('go').disabled = true;
-  for (const c of cards) await runSection(c, false);
-  $('go').disabled = false;
-  $('runStatus').textContent = 'Finished.';
-});
-
-$('url').value = store.get('td_url'); $('pass').value = store.get('td_pass');
-(function () { const d = new Date(Date.now() + 60 * 86400000); $('start').value = d.toISOString().slice(0, 10); })();
+/* ---------- start ---------- */
+document.getElementById('gear').addEventListener('click', () => set((s) => { if (s.tab !== 'settings') s.back = s.tab; s.tab = 'settings'; }));
+render();
+ensureRates().then(render).catch(() => {});
+if (S.trip.stops.some((s) => !s.geo || !(R[s.key] && R[s.key].voyage))) researchAll(false);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>

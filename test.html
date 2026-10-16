@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trip Desk · Step 1 test</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap">
+<style>
+:root{--bg:#0D1424;--sf:#16213A;--sf2:#1E2B4A;--ln:#2A3A5E;--ink:#F2F5FB;--mu:#A9B6D0;--ac:#FF8A4C;--onac:#1A0E05;--so:#3B2C2A;--si:#FFC9A8;--wb:#3A3320;--wi:#FFD76A;--bd:#4A1F2A;--bi:#FFB4C0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Manrope,system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px 16px 48px;display:flex;flex-direction:column;gap:16px}
+h1,h2{font-family:Sora,Manrope,sans-serif;margin:0;letter-spacing:-0.01em}
+h1{font-size:26px}h2{font-size:17px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+label{font-size:13px;font-weight:700;color:var(--mu);display:block;margin-bottom:6px}
+input,select{width:100%;height:48px;border:1px solid var(--ln);border-radius:12px;padding:0 14px;font:inherit;font-size:16px;color:var(--ink);background:var(--sf2)}
+.row{display:flex;gap:10px}.row>div{flex:1}
+button{font:inherit;cursor:pointer}
+.btn{height:50px;border:0;border-radius:14px;background:var(--ac);color:var(--onac);font-weight:700;font-size:16px;padding:0 16px}
+.btn2{height:44px;border-radius:12px;border:1px solid var(--ac);background:transparent;color:var(--ac);font-weight:700;padding:0 14px}
+.mu{color:var(--mu)}.small{font-size:13px}
+.chip{font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--so);color:var(--si);white-space:nowrap}
+.chip.warn{background:var(--wb);color:var(--wi)}.chip.bad{background:var(--bd);color:var(--bi)}
+.kv{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ln);padding-top:8px}
+.kv b{text-align:right}
+a{color:var(--ac)}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.check{display:flex;align-items:center;gap:10px;min-height:44px}
+.check input{width:22px;height:22px}
+details summary{cursor:pointer;color:var(--mu);font-size:13px;min-height:32px}
+pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--sf2);border-radius:10px;padding:10px;margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+<div>
+<h1>Trip Desk</h1>
+<div class="mu small">Step 1 test page. Checks that the backend can research a trip.</div>
+</div>
+
+<section class="card" aria-labelledby="h-conn">
+<h2 id="h-conn">Connection</h2>
+<div><label for="url">Backend web app URL (ends in /exec)</label><input id="url" type="url" autocomplete="off"></div>
+<div><label for="pass">Passcode</label><input id="pass" type="password" autocomplete="off"></div>
+<div class="row"><button class="btn2" id="save" type="button">Save and test</button></div>
+<div id="connStatus" class="small mu" role="status"></div>
+</section>
+
+<section class="card" aria-labelledby="h-trip">
+<h2 id="h-trip">Trip</h2>
+<div><label for="dest">Destination or route</label><input id="dest" type="text" value="Bali, Indonesia"><div class="small mu">For several places, separate them with &gt; and add nights after a colon, for example: Kanyakumari:2 &gt; Kerala:4 &gt; Tirupati:2</div></div>
+<div class="row">
+<div><label for="from">Flying from</label><input id="from" type="text" value="Kolkata"></div>
+<div><label for="passport">Passport</label><input id="passport" type="text" value="India"></div>
+</div>
+<div class="row">
+<div><label for="start">Start date</label><input id="start" type="date"></div>
+<div><label for="days">Days</label><input id="days" type="number" min="2" max="21" value="6"></div>
+</div>
+<div class="row">
+<div><label for="budget">Budget</label><select id="budget"><option value="budget">Budget</option><option value="comfort" selected>Comfort</option><option value="premium">Premium</option></select></div>
+<div><label for="food">Food</label><select id="food"><option value="both" selected>Both</option><option value="veg">Veg</option><option value="nonveg">Non-veg</option></select></div>
+</div>
+<div><label for="interests">Interests (comma separated)</label><input id="interests" type="text" value="beaches, food, culture"></div>
+<label class="check"><input id="free" type="checkbox"> Free style: pick the best dates and mix for me</label>
+<button class="btn" id="go" type="button">Research this trip</button>
+<div class="small mu" id="runStatus" role="status"></div>
+</section>
+
+<div id="results" style="display:flex;flex-direction:column;gap:16px"></div>
+</main>
+
+<script>
+const SECTIONS = [
+  ['overview', 'Best time and weather'],
+  ['visa', 'Visa and passport'],
+  ['food', 'Food'],
+  ['itinerary', 'Itinerary'],
+  ['routes', 'Trains, buses and flights between places'],
+  ['local', 'Getting around locally']
+];
+const $ = (id) => document.getElementById(id);
+const store = {
+  get: (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+function el(tag, attrs, kids) {
+  const n = document.createElement(tag);
+  Object.keys(attrs || {}).forEach((k) => {
+    if (k === 'class') n.className = attrs[k]; else n.setAttribute(k, attrs[k]);
+  });
+  [].concat(kids === undefined ? [] : kids).forEach((c) => {
+    if (c === null || c === undefined) return;
+    n.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  });
+  return n;
+}
+function link(url, label) {
+  if (!/^https?:\/\//i.test(String(url || ''))) return document.createTextNode(label || String(url || ''));
+  return el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, label || url);
+}
+function kv(k, v) { return el('div', { class: 'kv' }, [el('span', { class: 'mu' }, k), el('b', {}, v === null || v === undefined || v === '' ? 'Not found' : String(v))]); }
+function list(items) { return el('ul', {}, (items || []).map((t) => el('li', {}, String(t)))); }
+function inr(n) { return n === null || n === undefined ? 'n/a' : '₹' + Math.round(n).toLocaleString('en-IN'); }
+
+async function call(body) {
+  const url = store.get('td_url'), pass = store.get('td_pass');
+  if (!url || !pass) throw new Error('Add the backend URL and passcode first.');
+  const res = await fetch(url, { method: 'POST', body: JSON.stringify(Object.assign({ passcode: pass }, body)) });
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch (e) { throw new Error('The backend sent something unexpected: ' + text.slice(0, 120)); }
+  if (!json.ok) throw new Error(json.error || 'Backend error');
+  return json;
+}
+
+function parseStops(text) {
+  const parts = text.split('>').map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const total = Number($('days').value) || 6;
+  const each = Math.max(1, Math.round(total / parts.length));
+  return parts.map((p) => {
+    const m = p.match(/^(.*?)\s*:\s*(\d+)$/);
+    return m ? { name: m[1].trim(), nights: Number(m[2]) } : { name: p, nights: each };
+  });
+}
+
+function params(refresh) {
+  const stops = parseStops($('dest').value);
+  return {
+    action: 'section', refresh: !!refresh, stops,
+    dest: stops ? stops.map((s) => s.name).join(' > ') : $('dest').value.trim(), from: $('from').value.trim(), passport: $('passport').value.trim(),
+    start: $('start').value, days: Number($('days').value) || 6, budget: $('budget').value, food: $('food').value,
+    interests: $('interests').value.split(',').map((s) => s.trim()).filter(Boolean), free: $('free').checked, travellers: 2
+  };
+}
+
+const RENDER = {
+  overview(d) {
+    const out = [];
+    if (d.window) out.push(el('div', {}, [el('span', { class: 'chip' }, 'Best window'), ' ', (d.window.start || '?') + ' to ' + (d.window.end || '?'), el('div', { class: 'small mu' }, d.window.why || '')]));
+    if (d.bestTime) out.push(el('div', {}, [el('span', { class: 'chip' }, 'Verdict: ' + (d.bestTime.verdict || '?')), el('div', { class: 'small mu' }, d.bestTime.note || ''), el('div', { class: 'small' }, 'Months Jan to Dec: ' + (d.bestTime.monthScores || []).join(' ')) ]));
+    if (d.weather) out.push(el('div', {}, [kv('Summary', d.weather.summary), kv('High / low', d.weather.highC + '° / ' + d.weather.lowC + '°'), kv('Rain chance', (d.weather.rainChancePct ?? '?') + '%'), kv('Humidity', (d.weather.humidityPct ?? '?') + '%')]));
+    if ((d.events || []).length) out.push(el('div', {}, [el('b', {}, 'Events'), el('ul', {}, d.events.map((e) => el('li', {}, e.name + ' (' + e.dates + '): ' + e.effect)))]));
+    if ((d.advisories || []).length) out.push(el('div', {}, [el('b', {}, 'Advisories'), el('ul', {}, d.advisories.map((a) => el('li', {}, [el('span', { class: 'chip ' + (a.level === 'warning' ? 'bad' : a.level === 'caution' ? 'warn' : '') }, a.level || 'info'), ' ' + a.text + ' ', a.sourceUrl ? link(a.sourceUrl, 'source') : null])))]));
+    return out;
+  },
+  visa(d) {
+    return [
+      kv('Entry type', d.entryType), kv('Stay allowed', d.stayDays === null ? null : d.stayDays + ' days'), kv('Passport validity', d.passportValidityRule),
+      kv('Fee', d.fee && d.fee.amount !== null ? d.fee.amount + ' ' + (d.fee.currency || '') : null), kv('Processing', d.processing),
+      el('div', {}, [el('b', {}, 'Requirements'), list(d.requirements)]),
+      d.applyUrl ? el('div', {}, ['Apply: ', link(d.applyUrl, d.applyUrl)]) : null,
+      el('div', {}, [el('b', {}, 'Official sources'), el('ul', {}, (d.officialSources || []).map((s) => el('li', {}, [link(s.url, s.title || s.url), s.updated ? ' · updated ' + s.updated : ''])))]),
+      el('div', {}, [el('span', { class: 'chip ' + (d.confidence === 'high' ? '' : 'warn') }, 'Confidence: ' + (d.confidence || '?')), d.notes ? el('div', { class: 'small mu' }, d.notes) : null])
+    ];
+  },
+  food(d) {
+    return [
+      el('ul', {}, (d.mustTry || []).map((f) => el('li', {}, [el('b', {}, f.dish), ' (' + (f.type || '?') + ') at ' + (f.where || '?') + ', ' + inr(f.priceInr) + '. ' + (f.why || '')]))),
+      (d.areas || []).length ? el('div', {}, [el('b', {}, 'Areas to eat'), el('ul', {}, d.areas.map((a) => el('li', {}, a.name + ': ' + a.why)))]) : null,
+      (d.tips || []).length ? el('div', {}, [el('b', {}, 'Tips'), list(d.tips)]) : null,
+      d.notes ? el('div', { class: 'small mu' }, d.notes) : null
+    ];
+  },
+  itinerary(d) {
+    const out = (d.days || []).map((day) => el('div', {}, [
+      el('div', {}, [el('span', { class: 'chip' }, 'Day ' + day.day), ' ', el('b', {}, day.title || ''), day.date ? el('span', { class: 'small mu' }, ' · ' + day.date) : null]),
+      el('ul', {}, (day.items || []).map((it) => el('li', {}, [(it.time ? it.time + ' · ' : '') + it.title + (it.area ? ' (' + it.area + ')' : '') + ' · ' + inr(it.priceInr) + (it.kind === 'ticket' && it.ticketSearch ? ' · ticket: ' + it.ticketSearch : ''), it.note ? el('div', { class: 'small mu' }, it.note) : null])))
+    ]));
+    if (d.estimateInr) out.push(kv('Estimate for activities', inr(d.estimateInr.activities)));
+    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
+    return out;
+  },
+  routes(d) {
+    const out = (d.legs || []).map((l) => el('div', {}, [
+      el('div', {}, [el('b', {}, (l.from || '?') + ' to ' + (l.to || '?')), l.distanceKm ? el('span', { class: 'small mu' }, ' · about ' + l.distanceKm + ' km') : null]),
+      el('ul', {}, (l.options || []).map((o) => el('li', {}, [
+        el('span', { class: 'chip' }, o.mode || '?'), ' ' + (o.name || '') + (o.number ? ' (' + o.number + ')' : '') +
+        (o.departs ? ' · dep ' + o.departs : '') + (o.arrives ? ' · arr ' + o.arrives : '') +
+        (o.durationHrs ? ' · ' + o.durationHrs + ' h' : '') + ' · ' + inr(o.farePerPersonInr) + ' each' + (o.classOrType ? ' · ' + o.classOrType : ''),
+        o.note ? el('div', { class: 'small mu' }, o.note) : null
+      ]))),
+      el('div', { class: 'small' }, ['Suggested: ' + (l.recommended || '?') + '. ' + (l.why || '') + ' ', l.bookUrls && l.bookUrls.train ? link(l.bookUrls.train, 'IRCTC') : null, ' ', l.bookUrls && l.bookUrls.bus ? link(l.bookUrls.bus, 'redBus') : null])
+    ]));
+    if (d.suggestedOrder) out.push(el('div', {}, [el('b', {}, 'Suggested order: '), (d.suggestedOrder.stops || []).join(' > '), el('div', { class: 'small mu' }, d.suggestedOrder.why || '')]));
+    out.push(el('div', { class: 'small mu' }, 'Seat availability is not visible here. Check and book on IRCTC, redBus or the operator.'));
+    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
+    return out;
+  },
+  local(d) {
+    const out = (d.places || []).map((p) => el('div', {}, [
+      el('b', {}, p.place || ''),
+      el('ul', {}, (p.options || []).map((o) => el('li', {}, [
+        el('span', { class: 'chip' }, o.kind || 'other'), ' ', el('b', {}, o.name || ''), ' · ' + (o.fareInr || 'fare not found'),
+        el('div', { class: 'small' }, o.what || ''), o.tip ? el('div', { class: 'small mu' }, 'Tip: ' + o.tip) : null,
+        o.photoQuery ? el('div', { class: 'small mu' }, 'Photo search: ' + o.photoQuery) : null
+      ])))
+    ]));
+    if (d.notes) out.push(el('div', { class: 'small mu' }, d.notes));
+    return out;
+  }
+};
+
+function card(key, title) {
+  const body = el('div', { class: 'card' }, []);
+  const status = el('span', { class: 'chip warn' }, 'Waiting');
+  const rerun = el('button', { class: 'btn2', type: 'button' }, 'Re-run');
+  rerun.style.display = 'none';
+  body.appendChild(el('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px' }, [el('h2', {}, title), status]));
+  const content = el('div', { style: 'display:flex;flex-direction:column;gap:10px' });
+  body.appendChild(content); body.appendChild(rerun);
+  $('results').appendChild(body);
+  return { key, status, content, rerun };
+}
+
+async function runSection(c, refresh) {
+  c.status.className = 'chip warn'; c.status.textContent = 'Researching…'; c.rerun.style.display = 'none';
+  c.content.replaceChildren();
+  const t0 = Date.now();
+  try {
+    const r = (await call(Object.assign(params(refresh), { section: c.key }))).result;
+    const secs = Math.round((Date.now() - t0) / 1000);
+    c.status.className = 'chip'; c.status.textContent = (r.cached ? 'Cached' : 'Done in ' + secs + 's') + (r.searches ? ' · ' + r.searches + ' searches' : '');
+    RENDER[c.key](r.data).forEach((n) => n && c.content.appendChild(n));
+    if ((r.sources || []).length) c.content.appendChild(el('details', {}, [el('summary', {}, 'Sources searched (' + r.sources.length + ')'), el('ul', {}, r.sources.map((s) => el('li', {}, link(s.url, s.title))))]));
+    c.content.appendChild(el('details', {}, [el('summary', {}, 'Raw JSON'), el('pre', {}, JSON.stringify(r.data, null, 2))]));
+  } catch (e) {
+    c.status.className = 'chip bad'; c.status.textContent = 'Failed';
+    c.content.appendChild(el('div', {}, String(e.message || e)));
+  }
+  c.rerun.style.display = '';
+}
+
+$('save').addEventListener('click', async () => {
+  store.set('td_url', $('url').value.trim()); store.set('td_pass', $('pass').value);
+  $('connStatus').textContent = 'Testing…';
+  try {
+    const r = await call({ action: 'ping' });
+    $('connStatus').textContent = 'Connected. Claude calls used today: ' + r.usageToday + '.';
+  } catch (e) { $('connStatus').textContent = 'Could not connect: ' + (e.message || e); }
+});
+
+$('go').addEventListener('click', async () => {
+  const p = params(false);
+  if (!p.dest) { $('runStatus').textContent = 'Please enter a destination.'; return; }
+  if (!p.free && !p.start) { $('runStatus').textContent = 'Pick a start date, or turn on Free style.'; return; }
+  $('runStatus').textContent = 'Running one section at a time. Each takes about 20 to 60 seconds.';
+  $('results').replaceChildren();
+  const cards = SECTIONS.map((s) => { const c = card(s[0], s[1]); c.rerun.addEventListener('click', () => runSection(c, true)); return c; });
+  $('go').disabled = true;
+  for (const c of cards) await runSection(c, false);
+  $('go').disabled = false;
+  $('runStatus').textContent = 'Finished.';
+});
+
+$('url').value = store.get('td_url'); $('pass').value = store.get('td_pass');
+(function () { const d = new Date(Date.now() + 60 * 86400000); $('start').value = d.toISOString().slice(0, 10); })();
+</script>
+</body>
+</html>

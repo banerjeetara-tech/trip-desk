@@ -15,10 +15,14 @@ const CFG = {
   API_URL: 'https://api.anthropic.com/v1/messages',
   VERSION: '2023-06-01',
   SEARCH_TOOL: 'web_search_20260318',
-  MAX_SEARCHES: { overview: 4, visa: 4, food: 3, itinerary: 4, routes: 5, local: 4 },
-  MAX_TOKENS: { overview: 2500, visa: 2500, food: 2500, itinerary: 5000, routes: 4500, local: 3500 },
+  MAX_SEARCHES: { overview: 4, visa: 4, food: 3, itinerary: 4, routes: 5, local: 4, verify: 8 },
+  MAX_TOKENS: { overview: 2500, visa: 2500, food: 2500, itinerary: 5000, routes: 4500, local: 3500, verify: 5000 },
   CACHE_HOURS: 6,
-  DEFAULT_DAILY_CAP: 80,
+  // Prices in US dollars, used only for the cost meter. Check console.anthropic.com and edit if they change.
+  PRICE_IN_PER_MTOK: 2.0,
+  PRICE_OUT_PER_MTOK: 10.0,
+  PRICE_PER_SEARCH: 0.01,
+  DEFAULT_DAILY_CAP: 10,
   TZ: 'Asia/Kolkata'
 };
 
@@ -43,7 +47,9 @@ function doPost(e) {
     checkPasscode_(body.passcode);
     switch (body.action) {
       case 'ping':
-        return json_({ ok: true, service: 'Trip Desk', step: 1, usageToday: usageToday_() });
+        return json_({ ok: true, service: 'Trip Desk', step: 2, usageToday: usageToday_(), meter: meter_() });
+      case 'verify':
+        return json_({ ok: true, result: verifyPlan_(body) });
       case 'section':
         return json_({ ok: true, result: buildSection_(body) });
       default:
@@ -177,6 +183,53 @@ function promptFor_(section, b) {
     '"estimateInr":{"activities":number,"localTransport":number},"notes":"string or null"}';
 }
 
+/* ---------- plan check (the only call the free app makes) ---------- */
+
+function verifyPlan_(b) {
+  const plan = b.plan;
+  if (!plan || typeof plan !== 'object') throw new Error('No plan was sent.');
+  const text = JSON.stringify(plan);
+  if (text.length > 20000) throw new Error('The plan is too large to check. Remove some items and try again.');
+  guard_();
+  const today = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd');
+  const prompt = 'Today: ' + today + '\n' +
+    'Here is a trip plan built by a free app from Wikivoyage, Wikipedia, Open-Meteo and distance estimates. Some of it may be outdated or wrong.\n' +
+    'PLAN JSON:\n' + text + '\n\n' +
+    'Task: check the plan against current web sources. Focus on what matters most: entry and visa rules for the passport, travel between stops (do the suggested modes and times make sense, are there better real trains, buses or flights), ' +
+    'closures or advisories on the dates, opening days of the listed sights, local transport fares that look outdated, and the cost estimates. Keep it short and practical. Never invent facts; cite a URL for each correction.\n' +
+    'Return JSON: {"verdict":"good|fix|risky","summary":"two sentences",' +
+    '"items":[{"area":"visa|route|dates|weather|sights|transport|costs|safety|other","status":"ok|fix|warn","text":"string","fix":"string or null","sourceUrl":"string or null"}],' +
+    '"costCheck":{"looksRight":true,"note":"string"},"notes":"string or null"}';
+  const r = callClaude_(SYSTEM_PROMPT, prompt, 'verify');
+  return {
+    data: extractJson_(r.text), sources: r.sources.slice(0, 12), searches: r.searches,
+    usage: r.usage, usd: r.usd, meter: meter_(), generatedAt: new Date().toISOString()
+  };
+}
+
+function addSpend_(usd) {
+  const props = PropertiesService.getScriptProperties();
+  const month = 'usd:' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    props.setProperty(month, String((Number(props.getProperty(month)) || 0) + usd));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function meter_() {
+  const props = PropertiesService.getScriptProperties();
+  const month = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM');
+  return {
+    callsToday: usageToday_(),
+    dailyCap: Number(prop_('DAILY_CAP')) || CFG.DEFAULT_DAILY_CAP,
+    monthUsd: Number(props.getProperty('usd:' + month)) || 0,
+    month: month
+  };
+}
+
 /* ---------- Claude call ---------- */
 
 function callClaude_(system, user, section) {
@@ -185,6 +238,7 @@ function callClaude_(system, user, section) {
   let messages = [{ role: 'user', content: user }];
   const sources = [];
   let searches = 0;
+  const usage = { input: 0, output: 0 };
 
   for (let turn = 0; turn < 4; turn++) {
     const payload = {
@@ -207,6 +261,10 @@ function callClaude_(system, user, section) {
     try { data = JSON.parse(raw); } catch (e) { throw new Error('Claude API ' + code + ': ' + raw.slice(0, 200)); }
     if (code !== 200) throw new Error('Claude API ' + code + ': ' + ((data.error && data.error.message) || raw.slice(0, 200)));
 
+    if (data.usage) {
+      usage.input += (data.usage.input_tokens || 0) + (data.usage.cache_creation_input_tokens || 0) + (data.usage.cache_read_input_tokens || 0);
+      usage.output += data.usage.output_tokens || 0;
+    }
     (data.content || []).forEach(function (blk) {
       if (blk.type === 'server_tool_use') searches++;
       if (blk.type === 'web_search_tool_result' && Array.isArray(blk.content)) {
@@ -219,7 +277,9 @@ function callClaude_(system, user, section) {
       continue;
     }
     const text = (data.content || []).filter(function (blk) { return blk.type === 'text'; }).map(function (blk) { return blk.text; }).join('\n');
-    return { text: text, sources: dedupe_(sources), searches: searches };
+    const usd = usage.input / 1e6 * CFG.PRICE_IN_PER_MTOK + usage.output / 1e6 * CFG.PRICE_OUT_PER_MTOK + searches * CFG.PRICE_PER_SEARCH;
+    addSpend_(usd);
+    return { text: text, sources: dedupe_(sources), searches: searches, usage: usage, usd: usd };
   }
   throw new Error('Claude kept pausing. Please try again.');
 }
