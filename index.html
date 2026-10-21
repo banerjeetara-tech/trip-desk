@@ -130,7 +130,7 @@ const DEFAULTS = {
     food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid',
     proxy: 'https://youtubenews.banerjee-tara.workers.dev/?url=', backend: '', passcode: ''
   },
-  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {}, startAt: null, endMode: 'home', endAt: null },
+  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {}, startAt: null, endMode: 'home', endAt: null, target: null, lock: false },
   wdate: '', wstop: 0, people: ['You', 'Partner'], payer: 0, expenses: [], docs: {}, plans: [],
   check: null, meterLog: []
 };
@@ -976,7 +976,8 @@ function suggestCard() {
     h('div', { class: 'mu sm' }, 'Based on how much there is to see in each place and the weather on your dates.'),
     sug.map(({ s, x }) => h('div', { class: 'kv' }, h('span', {}, h('b', {}, shortName(s)), h('br'), h('span', { class: 'mu xs' }, x ? x.why : 'not researched yet')),
       h('span', {}, x ? (x.n === s.nights ? chip(x.n + (x.n === 1 ? ' night ✓' : ' nights ✓')) : chip(s.nights + ' → ' + x.n + ' nights', 'warn')) : '–'))),
-    diff ? h('button', { type: 'button', class: 'btn', onclick: () => set((S2) => { S2.trip.stops.forEach((s) => { const x = suggestNights(s); if (x) s.nights = x.n; }); S2.trip.swaps = {}; S2.banner = 'Nights updated to the suggestion. Dates, hotels, weather, travel and days all refreshed.'; }) }, 'Use suggested nights') : h('div', { class: 'sm b' }, 'Your nights already match the suggestion.'));
+    h('button', { type: 'button', class: 'btn', onclick: bestFit }, '⚖️ Best fit for my ' + (((S.trip.lock && S.trip.target) || totalNights()) + 1) + ' days'),
+    diff ? h('button', { type: 'button', class: 'btn2', onclick: () => set((S2) => { S2.trip.stops.forEach((s) => { const x = suggestNights(s); if (x) s.nights = x.n; }); S2.trip.swaps = {}; if (S2.trip.lock) S2.trip.target = S2.trip.stops.reduce((a, x) => a + x.nights, 0); S2.banner = 'Nights updated to the suggestion (' + (S2.trip.stops.reduce((a, x) => a + x.nights, 0) + 1) + ' days). Dates, hotels, weather, travel and days all refreshed.'; }) }, 'Use suggested nights (changes trip length)') : h('div', { class: 'sm b' }, 'Your nights already match the suggestion.'));
 }
 
 /* ---------- ready-made plans ---------- */
@@ -1164,7 +1165,7 @@ async function buildTours() {
   finally { w.loading = false; save(); render(); }
 }
 function useTour(tour) {
-  set((s) => { s.trip = structuredClone(tour.trip); s.banner = 'Using "' + tour.name + '". Building your plan now…'; });
+  set((s) => { s.trip = structuredClone(tour.trip); s.trip.target = s.trip.stops.reduce((a, x) => a + x.nights, 0); s.trip.lock = true; s.banner = 'Using "' + tour.name + '" for ' + (s.trip.target + 1) + ' days. Adding places will keep this length.'; });
   mem.wiz.tours = null;
   planNow(false);
   const m = document.getElementById('main'); if (m) m.scrollTop = 0;
@@ -1261,6 +1262,62 @@ function exploreCard() {
 }
 
 /* ---------- stops editing ---------- */
+/* ---------- trip length: keep my chosen days ---------- */
+function weightOf(s) { const x = suggestNights(s); return clamp(x ? x.n : 2, 2, 3); }
+function fitNights(trip, target) {
+  const st = trip.stops, n = st.length;
+  if (!n) return target;
+  target = Math.max(target, n);
+  const w = st.map(weightOf), sum = w.reduce((a, b) => a + b, 0) || n;
+  const ideal = w.map((x) => x / sum * target);
+  const alloc = ideal.map((x) => Math.max(1, Math.floor(x)));
+  let used = alloc.reduce((a, b) => a + b, 0);
+  while (used < target) { let bi = 0; ideal.forEach((x, i) => { if (x - alloc[i] > ideal[bi] - alloc[bi]) bi = i; }); alloc[bi]++; used++; }
+  while (used > target) { let bi = -1; alloc.forEach((a, i) => { if (a > 1 && (bi < 0 || a - ideal[i] > alloc[bi] - ideal[bi])) bi = i; }); if (bi < 0) break; alloc[bi]--; used--; }
+  st.forEach((s, i) => { s.nights = alloc[i]; });
+  return target;
+}
+function nightsLine(trip) { return trip.stops.map((s) => shortName(s) + ' ' + s.nights).join(', '); }
+function bestFit() {
+  set((s) => {
+    const want = s.trip.target || totalNights();
+    const got = fitNights(s.trip, want);
+    s.trip.target = got; s.trip.lock = true; s.trip.swaps = {};
+    s.banner = 'Best fit for ' + (got + 1) + ' days (' + got + ' nights): ' + nightsLine(s.trip) + '.' + (got > want ? ' Each place needs at least 1 night, so the trip is ' + (got + 1) + ' days.' : '');
+  });
+}
+function setTripLength(nights) {
+  set((s) => {
+    nights = clamp(nights, Math.max(1, s.trip.stops.length), 60);
+    s.trip.target = fitNights(s.trip, nights); s.trip.lock = true; s.trip.swaps = {};
+    s.banner = 'Trip set to ' + (s.trip.target + 1) + ' days. Nights shared as: ' + nightsLine(s.trip) + '.';
+  });
+}
+function changeNights(key, delta) {
+  set((s) => {
+    const st = s.trip.stops, me = st.find((x) => x.key === key);
+    if (!me) return;
+    if (delta < 0 && me.nights <= 1) return;
+    if (!s.trip.lock || !s.trip.target) { me.nights = clamp(me.nights + delta, 1, 21); s.trip.swaps = {}; return; }
+    const others = st.filter((x) => x !== me);
+    if (delta > 0) {
+      const donors = others.filter((x) => x.nights > 1).sort((a, b) => (b.nights / weightOf(b)) - (a.nights / weightOf(a)));
+      if (donors.length) { donors[0].nights--; me.nights++; s.banner = 'One more night in ' + shortName(me) + ', one less in ' + shortName(donors[0]) + '. Still ' + (s.trip.target + 1) + ' days.'; }
+      else { me.nights++; s.trip.target++; s.banner = 'Every other place already has 1 night, so the trip is now ' + (s.trip.target + 1) + ' days.'; }
+    } else {
+      if (!others.length) { me.nights--; s.trip.target--; }
+      else { const r = others.slice().sort((a, b) => (a.nights / weightOf(a)) - (b.nights / weightOf(b)))[0]; me.nights--; r.nights++; s.banner = 'One less night in ' + shortName(me) + ', one more in ' + shortName(r) + '. Still ' + (s.trip.target + 1) + ' days.'; }
+    }
+    s.trip.swaps = {};
+  });
+}
+function removeStopAt(i) {
+  set((x) => {
+    const gone = x.trip.stops.splice(i, 1)[0]; x.trip.swaps = {};
+    if (x.trip.lock && x.trip.target && x.trip.stops.length) { fitNights(x.trip, x.trip.target); x.banner = 'Removed ' + shortName(gone) + '. Kept your ' + (x.trip.target + 1) + ' days: ' + nightsLine(x.trip) + '.'; }
+    else x.banner = 'Removed ' + shortName(gone) + '.';
+  });
+}
 function addStop(name, at) {
   name = String(name || '').trim();
   if (!name) return;
@@ -1271,7 +1328,12 @@ function addStop(name, at) {
   set((s) => {
     if (at == null || at >= s.trip.stops.length) s.trip.stops.push(stop); else s.trip.stops.splice(at, 0, stop);
     s.trip.swaps = {};
-    s.banner = at != null && at < s.trip.stops.length - 1 ? 'Added ' + shortName(stop) + ' between ' + shortName(s.trip.stops[at - 1] || { name: s.settings.home.name }) + ' and ' + shortName(s.trip.stops[at + 1]) + '. Dates, legs and days re-planned.' : '';
+    const where = at != null && at < s.trip.stops.length - 1 ? 'Added ' + shortName(stop) + ' between ' + shortName(s.trip.stops[at - 1] || { name: s.settings.home.name }) + ' and ' + shortName(s.trip.stops[at + 1]) + '.' : 'Added ' + shortName(stop) + '.';
+    if (s.trip.lock && s.trip.target) {
+      const before = s.trip.target, got = fitNights(s.trip, before);
+      s.trip.target = got;
+      s.banner = where + (got > before ? ' Each place needs at least 1 night, so the trip is now ' + (got + 1) + ' days: ' : ' Kept your ' + (got + 1) + ' days: ') + nightsLine(s.trip) + '.';
+    } else s.banner = where + ' Trip is now ' + (totalNights() + 1) + ' days. Tip: set a trip length to keep it fixed.';
   });
   researchStop(S.trip.stops.find((x) => x.key === key), false).then(render);
 }
@@ -1427,7 +1489,7 @@ function itemRow(it, di, d) {
       it.dayTrip ? h('button', { type: 'button', class: 'btn2', onclick: () => addStop(it.dayTrip, S.trip.stops.findIndex((x) => x.key === d.stop.key) + 1) }, 'Stay there instead') : null,
       it.tag !== 'Travel' && it.tag !== 'Free' && it.place ? ext(mapLink(it.dayTrip || it.title, it.place), 'Map', 'btn2') : null));
 }
-function addNight(key, n) { set((s) => { const st = s.trip.stops.find((x) => x.key === key); if (!st) return; st.nights = clamp(st.nights + n, 1, 21); s.trip.swaps = {}; s.banner = (n > 0 ? 'Added a night in ' : 'Removed a night in ') + shortName(st) + '. Dates, hotels, weather, travel and days refreshed.'; }); }
+function addNight(key, n) { set((s) => { const st = s.trip.stops.find((x) => x.key === key); if (!st) return; st.nights = clamp(st.nights + n, 1, 21); s.trip.swaps = {}; if (s.trip.lock && s.trip.target) s.trip.target = Math.max(s.trip.stops.length, s.trip.target + n); s.banner = (n > 0 ? 'Added a night in ' : 'Removed a night in ') + shortName(st) + '. Dates, hotels, weather, travel and days refreshed.'; }); }
 function extrasCard(s) {
   const left = (mem.left || {})[s.key];
   if (!left || (!left.sights.length && !left.trips.length)) return null;
@@ -1459,7 +1521,7 @@ function viewPlace() {
     v.intro ? h('div', { class: 'sm' }, v.intro) : null,
     h('div', { class: 'grid2' }, statBox('Your dates', nice(dates[i].from) + ' – ' + nice(dates[i].out)), statBox('Weather then', cl ? cl.tmax + '° · rain ' + cl.rain + '%' : '–')),
     h('div', { class: 'row wrap' }, chip(vd[0], vd[1]), sug ? h('span', { class: 'mu xs' }, 'Suggested: ' + sug.n + (sug.n === 1 ? ' night' : ' nights') + ' (' + sug.why + ')') : null),
-    stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'), () => addNight(s.key, -1), () => addNight(s.key, 1))));
+    stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'), () => changeNights(s.key, -1), () => changeNights(s.key, 1))));
   const sights = (v.see || []).concat(v.do || []);
   out.push(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'All places to visit'), chip(sights.length + ' places')),
     h('div', { class: 'mu xs' }, '"Must see" puts a place first in your day plan. Hidden places are left out.'),
@@ -1504,10 +1566,8 @@ function viewPlan() {
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => set((x) => { const a = x.trip.stops; [a[i - 1], a[i]] = [a[i], a[i - 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↑'),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move later', disabled: i === st.length - 1, onclick: () => set((x) => { const a = x.trip.stops; [a[i + 1], a[i]] = [a[i], a[i + 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↓'),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Explore ' + s.name, onclick: () => { explore(s.name); document.getElementById('main').scrollTop = 0; } }, '🔍'),
-        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + s.name, onclick: () => set((x) => { x.trip.stops.splice(i, 1); x.trip.swaps = {}; x.banner = 'Removed ' + shortName(s) + '.'; }) }, '×')),
-      stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'),
-        () => set((x) => { x.trip.stops[i].nights = clamp(s.nights - 1, 1, 21); x.trip.swaps = {}; }),
-        () => set((x) => { x.trip.stops[i].nights = clamp(s.nights + 1, 1, 21); x.trip.swaps = {}; })),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + s.name, onclick: () => removeStopAt(i) }, '×')),
+      stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'), () => changeNights(s.key, -1), () => changeNights(s.key, 1)),
       alts.length > 1 ? h('div', { class: 'row' }, h('label', { for: 'alt' + i, class: 'xs' }, 'Wrong place?'),
         h('select', { id: 'alt' + i, class: 'inp', style: 'height:40px', onchange: (e) => { const a = alts[+e.target.value]; set((x) => { x.trip.stops[i].geo = a; R[s.key].geo = a; delete R[s.key].voyage; delete R[s.key].climate; delete R[s.key].cur; }); researchStop(S.trip.stops[i], false); } },
           alts.map((a, k) => h('option', { value: String(k), selected: s.geo && a.lat === s.geo.lat && a.lng === s.geo.lng ? 'selected' : null }, [a.name, a.admin1, a.country].filter(Boolean).join(', '))))) : null,
@@ -1534,6 +1594,12 @@ function viewPlan() {
     h('label', { for: 'start' }, 'Start date'),
     h('input', { id: 'start', class: 'inp', type: 'date', value: S.trip.start, onchange: (e) => { if (e.target.value) set((s) => { s.trip.start = e.target.value; }); } }),
     h('div', { class: 'mu sm' }, st.length ? totalNights() + ' nights, back on ' + nice(addDays(S.trip.start, totalNights()), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''),
+    st.length ? h('div', { style: 'display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--ln);padding-top:10px' },
+      h('label', {}, 'Trip length'),
+      stepper('days', ((S.trip.lock && S.trip.target) || totalNights()) + 1 + ' days · ' + ((S.trip.lock && S.trip.target) || totalNights()) + ' nights', () => setTripLength(((S.trip.lock && S.trip.target) || totalNights()) - 1), () => setTripLength(((S.trip.lock && S.trip.target) || totalNights()) + 1)),
+      h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Keep my trip length fixed'), h('div', { class: 'mu sm' }, 'Adding a place re-shares the nights instead of making the trip longer.')),
+        sw(S.trip.lock, 'Keep my trip length fixed', () => set((s) => { s.trip.lock = !s.trip.lock; if (s.trip.lock && !s.trip.target) s.trip.target = totalNights(); s.banner = s.trip.lock ? 'Trip length fixed at ' + (s.trip.target + 1) + ' days.' : 'Trip length is free: adding places adds nights.'; }))),
+      h('button', { type: 'button', class: 'btn2', onclick: bestFit }, '⚖️ Best fit for ' + (((S.trip.lock && S.trip.target) || totalNights()) + 1) + ' days')) : null,
     h('label', {}, 'Travellers'),
     stepper('travellers', S.trip.travellers + (S.trip.travellers === 1 ? ' person' : ' people'), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers - 1, 1, 12); }), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers + 1, 1, 12); })),
     h('label', {}, 'Budget style'), segs([['budget', 'Budget'], ['comfort', 'Comfort'], ['premium', 'Premium']], S.settings.budget, (v) => set((s) => { s.settings.budget = v; })),
@@ -2130,7 +2196,7 @@ function renderSheet() {
     st.length ? h('details', {}, h('summary', {}, 'Your places (' + st.length + ')'), st.map((s, i) => h('div', { class: 'row line' }, h('span', { class: 'num' }, i + 1), h('div', { class: 'grow b' }, shortName(s)),
       h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => set((x) => { const a = x.trip.stops; [a[i - 1], a[i]] = [a[i], a[i - 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '.'; }) }, '↑'),
       h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move later', disabled: i === st.length - 1, onclick: () => set((x) => { const a = x.trip.stops; [a[i + 1], a[i]] = [a[i], a[i + 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '.'; }) }, '↓'),
-      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + shortName(s), onclick: () => set((x) => { x.trip.stops.splice(i, 1); x.trip.swaps = {}; x.banner = 'Removed ' + shortName(s) + '.'; }) }, '×')))) : null);
+      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + shortName(s), onclick: () => removeStopAt(i) }, '×')))) : null);
   host.replaceChildren(h('div', { class: 'sheet-bg', onclick: closeSheet }, sheet));
 }
 document.getElementById('fab').addEventListener('click', openSheet);
