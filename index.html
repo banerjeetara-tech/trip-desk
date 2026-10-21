@@ -217,23 +217,49 @@ async function getText(url, ms) {
 async function geocode(input) {
   const parts = String(input).split(',').map((s) => s.trim()).filter(Boolean);
   const name = parts[0], hint = norm(parts.slice(1).join(' '));
-  let res = [];
-  try {
-    const j = await getJSON('https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=' + enc(name));
-    res = (j.results || []).map((r) => ({ name: r.name, lat: r.latitude, lng: r.longitude, cc: r.country_code || '', country: r.country || '', admin1: r.admin1 || '', pop: r.population || 0 }));
-  } catch (e) { /* fall through to Wikipedia */ }
-  if (hint) {
-    const f = res.filter((r) => norm(r.country + ' ' + r.admin1).includes(hint));
-    if (f.length) res = f;
-  }
   const home = S.settings.home && S.settings.home.cc;
-  res.sort((a, b) => (b.cc === home) - (a.cc === home) || b.pop - a.pop);
-  if (!res.length) {
-    const w = await getJSON('https://en.wikipedia.org/w/api.php?action=query&prop=coordinates&redirects=1&format=json&formatversion=2&origin=*&titles=' + enc(name));
-    const pg = w.query && w.query.pages && w.query.pages[0];
-    if (pg && pg.coordinates && pg.coordinates[0]) res = [{ name: pg.title, lat: pg.coordinates[0].lat, lng: pg.coordinates[0].lon, cc: '', country: '', admin1: '' }];
-  }
+  // 1) Wikipedia knows common spellings, states and regions (Kanyakumari, Kerala, Munnar…)
+  const wikiP = wikiPlace(input).catch(() => null);
+  // 2) Open-Meteo geocoding gives exact towns with country codes
+  const omP = getJSON('https://geocoding-api.open-meteo.com/v1/search?count=8&language=en&format=json&name=' + enc(name))
+    .then((j) => (j.results || []).map((r) => ({ name: r.name, lat: r.latitude, lng: r.longitude, cc: (r.country_code || '').toUpperCase(), country: r.country || '', admin1: r.admin1 || '', pop: r.population || 0 })))
+    .catch(() => []);
+  const [wiki, om0] = await Promise.all([wikiP, omP]);
+  let om = om0;
+  if (hint) { const f = om.filter((r) => norm(r.country + ' ' + r.admin1).includes(hint)); if (f.length) om = f; }
+  om.sort((a, b) => (b.cc === home) - (a.cc === home) || b.pop - a.pop);
+  const res = [];
+  if (wiki) res.push(wiki);
+  om.forEach((r) => { if (!res.some((x) => hav(x, r) < 25)) res.push(r); });
+  // If Wikipedia found it, keep Open-Meteo matches only when they are in the same country (avoids "Kerälä, Finland" for Kerala)
+  if (wiki && wiki.cc) return res.filter((r, i) => i === 0 || r.cc === wiki.cc);
   return res;
+}
+async function wikiPlace(input) {
+  const W = 'https://en.wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&redirects=1&prop=coordinates|pageprops&ppprop=wikibase_item|disambiguation';
+  let j = await getJSON(W + '&action=query&titles=' + enc(input.trim().replace(/^\w/, (c) => c.toUpperCase())), 12000);
+  let pg = j.query && j.query.pages && j.query.pages[0];
+  if (!pg || pg.missing || !pg.coordinates || (pg.pageprops && 'disambiguation' in pg.pageprops)) {
+    j = await getJSON(W + '&action=query&generator=search&gsrlimit=1&gsrsearch=' + enc(input), 12000);
+    pg = j.query && j.query.pages && j.query.pages[0];
+  }
+  if (!pg || !pg.coordinates || !pg.coordinates[0]) return null;
+  const out = { name: pg.title.replace(/\s*\(.*\)$/, '').split(',')[0], lat: pg.coordinates[0].lat, lng: pg.coordinates[0].lon, cc: '', country: '', admin1: '', wiki: pg.title };
+  const qid = pg.pageprops && pg.pageprops.wikibase_item;
+  try {
+    if (!qid) throw new Error('no item');
+    const sparql = 'SELECT ?iso ?cl ?al WHERE { wd:' + qid + ' wdt:P17 ?c . ?c wdt:P297 ?iso . OPTIONAL { wd:' + qid + ' wdt:P131 ?a . ?a rdfs:label ?al . FILTER(LANG(?al)="en") } ?c rdfs:label ?cl . FILTER(LANG(?cl)="en") } LIMIT 1';
+    const q = await getJSON('https://query.wikidata.org/sparql?format=json&query=' + enc(sparql), 12000);
+    const b = q.results && q.results.bindings && q.results.bindings[0];
+    if (!b) throw new Error('no country');
+    out.cc = b.iso.value.toUpperCase(); out.country = b.cl.value; out.admin1 = b.al ? b.al.value : '';
+  } catch (e) {
+    try {
+      const r = await getJSON('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en&latitude=' + out.lat + '&longitude=' + out.lng, 10000);
+      out.cc = (r.countryCode || '').toUpperCase(); out.country = r.countryName || ''; out.admin1 = r.principalSubdivision || '';
+    } catch (e2) {}
+  }
+  return out;
 }
 function hav(a, b) {
   const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
@@ -842,7 +868,9 @@ function viewPlan() {
       alts.length > 1 ? h('div', { class: 'row' }, h('label', { for: 'alt' + i, class: 'xs' }, 'Wrong place?'),
         h('select', { id: 'alt' + i, class: 'inp', style: 'height:40px', onchange: (e) => { const a = alts[+e.target.value]; set((x) => { x.trip.stops[i].geo = a; R[s.key].geo = a; delete R[s.key].voyage; delete R[s.key].climate; delete R[s.key].cur; }); researchStop(S.trip.stops[i], false); } },
           alts.map((a, k) => h('option', { value: String(k), selected: s.geo && a.lat === s.geo.lat && a.lng === s.geo.lng ? 'selected' : null }, [a.name, a.admin1, a.country].filter(Boolean).join(', '))))) : null,
-      srcChips(s.key)));
+      srcChips(s.key),
+      Object.values((r.err) || {}).some(Boolean) ? h('div', { class: 'warnbox xs' }, Object.entries(r.err).filter(([, v]) => v).map(([k, v]) => ({ geo: 'Location', voyage: 'Guide', climate: 'Climate', cur: 'Currency' }[k] || k) + ': ' + v).join(' · ')) : null,
+      Object.values((r.err) || {}).some(Boolean) ? h('button', { type: 'button', class: 'btn2', onclick: () => { R[s.key] = { err: {}, at: {}, alts: [] }; set((x) => { x.trip.stops[i].geo = null; }); researchStop(S.trip.stops[i], true); } }, 'Retry ' + shortName(s)) : null));
   });
   const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', onkeydown: (e) => { if (e.key === 'Enter') { addStop(e.target.value); } } });
   list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: 'newstop' }, 'Add a place'),
