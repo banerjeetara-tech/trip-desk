@@ -283,7 +283,7 @@ function hav(a, b) {
 const WV = 'https://en.wikivoyage.org/w/api.php?format=json&formatversion=2&origin=*&redirects=1';
 const WANT = {
   understand: /^understand/i, getin: /^get in/i, getaround: /^get around/i, see: /^see\b/i, do: /^do\b/i,
-  eat: /^eat\b/i, sleep: /^sleep\b/i, safe: /^stay (safe|healthy)/i, cities: /^cities\b/i, other: /^other destinations/i, gonext: /^go next/i
+  eat: /^eat\b/i, sleep: /^sleep\b/i, safe: /^stay (safe|healthy)/i, cities: /^cities\b/i, other: /^other destinations/i, gonext: /^go next/i, districts: /^districts/i
 };
 async function wvParseSections(title) {
   const j = await getJSON(WV + '&action=parse&prop=sections&page=' + enc(title));
@@ -411,6 +411,37 @@ function fareLabel(f) {
   return f.raw + ' (about ₹' + fmt(lo) + (hi != null ? ' to ₹' + fmt(hi) : '') + ')';
 }
 
+function districtLinks(d, title) {
+  const base = title.replace(/ /g, '_') + '/';
+  const all = [...d.querySelectorAll('a[href^="/wiki/"]')].map((a) => { try { return decodeURIComponent(a.getAttribute('href').slice(6).split('#')[0]); } catch (e) { return ''; } })
+    .filter((x) => x && !/^(File|Special|Template|Category|Wikivoyage|Help):/i.test(x));
+  const sub = all.filter((x) => x.startsWith(base));
+  return [...new Set((sub.length ? sub : []).map((x) => x.replace(/_/g, ' ')))].slice(0, 6);
+}
+async function districtExtras(out, titles) {
+  const res = await Promise.allSettled(titles.slice(0, 4).map(async (dt) => {
+    const p = await wvParseSections(dt);
+    const want = {};
+    (p.sections || []).filter((s) => String(s.toclevel) === '1').forEach((s) => ['see', 'do', 'eat', 'sleep'].forEach((k) => { if (!want[k] && WANT[k].test(s.line)) want[k] = s.index; }));
+    const ks = Object.keys(want);
+    const docs = await Promise.allSettled(ks.map((k) => getJSON(WV + '&action=parse&prop=text&disablelimitreport=1&disableeditsection=1&page=' + enc(p.title) + '&section=' + want[k], 20000)));
+    return { name: p.title.split('/').pop(), ks, docs };
+  }));
+  res.forEach((r) => {
+    if (r.status !== 'fulfilled') return;
+    const { name, ks, docs } = r.value;
+    const tag = (arr) => arr.map((x) => Object.assign({}, x, { text: '(' + name + ') ' + x.text }));
+    docs.forEach((dr, i) => {
+      if (dr.status !== 'fulfilled' || !dr.value.parse) return;
+      const d = cleanDoc(dr.value.parse.text || ''), k = ks[i];
+      if (k === 'sleep' || k === 'eat') {
+        const c = catListings(d), cur = out[k + 'Cats'] || { budget: [], mid: [], splurge: [], other: [] };
+        ['budget', 'mid', 'splurge', 'other'].forEach((cat) => { cur[cat] = cur[cat].concat(tag(c[cat].slice(0, 3))); });
+        out[k + 'Cats'] = cur; out[k] = cur.budget.concat(cur.mid, cur.splurge, cur.other).slice(0, 30);
+      } else out[k] = out[k].concat(tag(listItems(d, 6)));
+    });
+  });
+}
 async function fetchVoyage(stop) {
   const parsed = await wvFind(stop);
   const title = parsed.title;
@@ -419,7 +450,7 @@ async function fetchVoyage(stop) {
   tops.forEach((s) => { Object.keys(WANT).forEach((k) => { if (!want[k] && WANT[k].test(s.line)) want[k] = s.index; }); });
   const keys = Object.keys(want);
   const htmls = await Promise.allSettled(keys.map((k) => getJSON(WV + '&action=parse&prop=text&disablelimitreport=1&disableeditsection=1&page=' + enc(title) + '&section=' + want[k], 20000)));
-  const out = { v: 2, title, url: 'https://en.wikivoyage.org/wiki/' + enc(title.replace(/ /g, '_')), see: [], do: [], eat: [], sleep: [], getin: [], modes: [], safe: [], understand: [], gonext: [], dests: [], sleepCats: null, eatCats: null, image: '', intro: '' };
+  const out = { v: 3, districts: [], title, url: 'https://en.wikivoyage.org/wiki/' + enc(title.replace(/ /g, '_')), see: [], do: [], eat: [], sleep: [], getin: [], modes: [], safe: [], understand: [], gonext: [], dests: [], sleepCats: null, eatCats: null, image: '', intro: '' };
   htmls.forEach((r, i) => {
     if (r.status !== 'fulfilled' || !r.value.parse) return;
     const d = cleanDoc(r.value.parse.text || '');
@@ -429,9 +460,11 @@ async function fetchVoyage(stop) {
     else if (k === 'safe' || k === 'understand') out[k] = paragraphs(d, 3);
     else if (k === 'cities' || k === 'other') { const li = listItems(d, 12); out.dests = (out.dests || []).concat(li); out.see = out.see.concat(li.slice(0, 10)); }
     else if (k === 'gonext') out.gonext = listItems(d, 10);
+    else if (k === 'districts') out.districts = districtLinks(d, title);
     else if (k === 'sleep' || k === 'eat') { const c = catListings(d); out[k + 'Cats'] = c; out[k] = c.budget.concat(c.mid, c.splurge, c.other).slice(0, 24); }
     else out[k] = (out[k] || []).concat(listItems(d, 20));
   });
+  if (out.see.length + out.do.length < 4 && out.districts.length) { try { await districtExtras(out, out.districts); } catch (e) {} }
   try {
     const q = await getJSON(WV + '&action=query&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=900&exintro=1&explaintext=1&exsentences=3&titles=' + enc(title));
     const pg = q.query && q.query.pages && q.query.pages[0];
@@ -607,7 +640,7 @@ async function researchStop(stop, force) {
   }
   const s = S.trip.stops.find((x) => x.key === stop.key) || stop;
   const jobs = [];
-  if (force || !r.voyage || r.voyage.v !== 2) jobs.push(task(s.key, 'voyage', () => fetchVoyage(s)));
+  if (force || !r.voyage || r.voyage.v !== 3) jobs.push(task(s.key, 'voyage', () => fetchVoyage(s)));
   if (force || !r.climate) jobs.push(task(s.key, 'climate', () => fetchClimate(s.geo)));
   if (s.geo.cc && s.geo.cc !== S.settings.home.cc && (force || !r.cur)) jobs.push(task(s.key, 'cur', () => fetchCurrency(s.geo.cc)));
   await Promise.all(jobs);
@@ -1021,7 +1054,7 @@ async function explore(name) {
   mem.exploreQ = name; if (SUG.explore) SUG.explore.items = []; mem.exploreKey = keyOf(name); mem.exploreName = name;
   const key = mem.exploreKey;
   render();
-  if (!(R[key] && R[key].voyage && R[key].voyage.v === 2)) await task(key, 'voyage', () => fetchVoyage({ name, geo: null }));
+  if (!(R[key] && R[key].voyage && R[key].voyage.v === 3)) await task(key, 'voyage', () => fetchVoyage({ name, geo: null }));
   const v = R[key] && R[key].voyage;
   if (v && v.dests && v.dests.length && !R[key].destImg) {
     try {
@@ -1049,7 +1082,7 @@ function removeSight(placeKey, sightName) {
   set((s) => { s.trip.must[placeKey] = (s.trip.must[placeKey] || []).filter((n) => n !== sightName); s.banner = 'Removed "' + sightName + '" from your must-see list.'; });
 }
 /* ---------- Plan a trip for me: region + nights + dates -> suggested tours ---------- */
-function wiz() { return mem.wiz || (mem.wiz = { q: '', nights: 5, start: S.trip.start, best: false }); }
+function wiz() { return mem.wiz || (mem.wiz = { q: '', nights: 6, start: S.trip.start, best: false, inc: [] }); }
 async function ensureGeo(name) {
   const r = rs(keyOf(name));
   if (!r.geo) { const res = await geocode(name); if (res.length) { r.geo = res[0]; r.alts = res.slice(0, 6); } }
@@ -1068,22 +1101,26 @@ function spreadNights(stops, n) {
 async function buildTours() {
   const w = wiz();
   const q = (w.q || '').trim();
-  if (!q) { w.err = 'Type where you want to go, for example Kerala.'; render(); return; }
-  w.loading = true; w.tours = null; w.err = ''; w.step = 'Reading the travel guide for ' + q + '…'; render();
+  const inc = (w.inc || []).slice();
+  if (!q && !inc.length) { w.err = 'Type where you want to go, for example Kerala.'; render(); return; }
+  w.loading = true; w.tours = null; w.err = ''; w.step = 'Reading the travel guide for ' + (q || inc.join(', ')) + '…'; render();
   try {
-    const key = keyOf(q), r = rs(key);
-    if (!r.voyage || r.voyage.v !== 2) r.voyage = await fetchVoyage({ name: q, geo: null });
-    const v = r.voyage;
+    let v = { title: inc.join(' and '), dests: [], intro: '' };
+    if (q) { const r = rs(keyOf(q)); if (!r.voyage || r.voyage.v !== 3) r.voyage = await fetchVoyage({ name: q, geo: null }); v = r.voyage; }
+    // places you asked to include ("via Kanyakumari")
+    const must = [];
+    for (const name of inc) { try { const g = await ensureGeo(name); if (g) { must.push({ name, rank: -1, geo: g, must: true }); await ensureClimate(name); } } catch (e) {} }
     let cands = (v.dests || []).map((d, i) => ({ name: d.name, rank: i, text: d.text }));
-    if (!cands.length) cands = [{ name: v.title, rank: 0, text: v.intro }];
+    if (!cands.length && q) cands = [{ name: v.title, rank: 0, text: v.intro }];
+    cands = cands.filter((c) => !inc.some((n) => norm(n) === norm(c.name)));
     cands = cands.filter((c, i, a) => a.findIndex((x) => norm(x.name) === norm(c.name)) === i).slice(0, 9);
     w.step = 'Finding ' + cands.length + ' places in ' + v.title + '…'; render();
     await Promise.all(cands.map(async (c) => { try { c.geo = await ensureGeo(c.name); } catch (e) {} }));
     cands = cands.filter((c) => c.geo);
-    if (!cands.length) throw new Error('Could not locate the places in ' + v.title + '.');
+    if (!cands.length && !must.length) throw new Error('Could not locate the places in ' + v.title + '.');
     // keep places in the same country as most of them (guides sometimes link to neighbours)
     const ccCount = {}; cands.forEach((c) => { ccCount[c.geo.cc] = (ccCount[c.geo.cc] || 0) + 1; });
-    const mainCc = Object.keys(ccCount).sort((a, b) => ccCount[b] - ccCount[a])[0];
+    const mainCc = Object.keys(ccCount).sort((a, b) => ccCount[b] - ccCount[a])[0] || (must[0] && must[0].geo.cc);
     cands = cands.filter((c) => !c.geo.cc || c.geo.cc === mainCc);
     w.step = 'Checking the weather in each place…'; render();
     await Promise.all(cands.map((c) => ensureClimate(c.name)));
@@ -1095,16 +1132,19 @@ async function buildTours() {
       if (bi >= 0) { const yr = now.getFullYear() + (bi <= now.getMonth() ? 1 : 0); start = yr + '-' + String(bi + 1).padStart(2, '0') + '-10'; }
     }
     const m = parseIso(start).getMonth();
+    must.forEach((c) => { const cl = R[keyOf(c.name)] && R[keyOf(c.name)].climate; c.wx = cl && cl.months[m]; c.score = 100; });
     cands.forEach((c) => { const cl = R[keyOf(c.name)].climate; c.wx = cl && cl.months[m]; c.score = c.wx ? wxScore(c.wx.tmax, c.wx.rain) : 50; });
     const n = w.nights;
-    const k = clamp(Math.round(n / 2.2), 1, Math.min(5, cands.length));
+    const kAll = clamp(Math.round(n / 2.2), 1, 6);
+    const k = Math.min(Math.max(kAll - must.length, must.length ? 0 : 1), cands.length);
     const good = cands.filter((c) => c.score >= 40);
     const pool = good.length >= k ? good : cands;
     const byRank = pool.slice().sort((a, b) => a.rank - b.rank);
     const byWx = pool.slice().sort((a, b) => b.score - a.score || a.rank - b.rank);
     const sig = (l) => l.map((c) => c.name).sort().join('|');
     const tours = [], seen = new Set();
-    const mk = (name, note, list) => {
+    const mk = (name, note, list0) => {
+      const list = must.concat(list0);
       if (!list.length || seen.has(sig(list))) return;
       seen.add(sig(list));
       let stops = list.map((c) => ({ name: c.name, key: keyOf(c.name), nights: 1, geo: c.geo }));
@@ -1114,11 +1154,12 @@ async function buildTours() {
       const est = withPlan(trip, {}, () => { const c = costs(), lg = legs(); return { total: c.total, travelH: lg.reduce((a, l) => a + l.sel.hrs, 0), modes: lg.map((l) => l.sel.label) }; });
       tours.push({ name, note, trip, est, wx: list.reduce((o, c) => { o[c.name] = c.wx; return o; }, {}) });
     };
-    mk('Top highlights', 'The best-known places in ' + v.title + ', in the easiest order.', byRank.slice(0, k));
+    const via = must.length ? ' Includes ' + must.map((c) => c.name).join(' and ') + '.' : '';
+    mk('Top highlights', (q ? 'The best-known places in ' + v.title + ', in the easiest order.' : 'Your places in the easiest order.') + via, byRank.slice(0, k));
     mk('Best weather', 'The places with the most pleasant weather on your dates.', byWx.slice(0, k));
-    if (k > 1) mk('Relaxed', 'Fewer places and more time in each, less packing and travel.', byRank.slice(0, k - 1));
-    if (pool.length > k) mk('Off the beaten path', 'Mixes one big name with quieter places.', byRank.slice(0, 1).concat(byRank.slice(k, k + Math.max(1, k - 1))));
-    w.tours = tours; w.startUsed = start; w.region = v.title;
+    if (k > 1 || (k === 1 && must.length)) mk('Relaxed', 'Fewer places and more time in each, less packing and travel.', byRank.slice(0, Math.max(0, k - 1)));
+    if (k >= 1 && pool.length > k) mk('Off the beaten path', 'Mixes one big name with quieter places.', byRank.slice(0, 1).concat(byRank.slice(k, k + Math.max(1, k - 1))));
+    w.tours = tours; w.startUsed = start; w.region = [q ? v.title : '', ...must.map((c) => c.name)].filter(Boolean).join(' + ');
   } catch (e) { w.err = e.message || String(e); }
   finally { w.loading = false; save(); render(); }
 }
@@ -1131,13 +1172,20 @@ function useTour(tour) {
 function wizardCard() {
   const w = wiz();
   const card = h('div', { class: 'card hl' }, h('h2', {}, '✨ Plan a trip for me'),
-    h('div', { class: 'mu sm' }, 'Say where and for how long. I check the weather in each place and suggest the best tours from ' + S.settings.home.name + ' and back.'),
+    h('div', { class: 'mu sm' }, 'Say where, any places you want on the way, and how many days. I check the weather in each place and suggest the best tours from ' + S.settings.home.name + ' and back.'),
     h('label', { for: 'wiz' }, 'Where do you want to go?'),
     h('input', { id: 'wiz', class: 'inp', type: 'search', value: w.q, placeholder: 'e.g. Kerala, Rajasthan, Thailand', autocomplete: 'off',
       oninput: (e) => { w.q = e.target.value; suggestFor('wiz', (n) => { w.q = n; render(); })(e); }, onkeydown: (e) => { if (e.key === 'Enter') buildTours(); } }),
     suggestBox('wiz'),
-    h('label', {}, 'How long?'),
-    stepper('nights', w.nights + ' nights · ' + (w.nights + 1) + ' days', () => { w.nights = clamp(w.nights - 1, 1, 30); render(); }, () => { w.nights = clamp(w.nights + 1, 1, 30); render(); }),
+    h('label', { for: 'wizinc' }, 'Also include (optional)'),
+    h('div', { class: 'mu xs' }, 'Places you want on the way, e.g. Kanyakumari. Every tour will include them.'),
+    (w.inc || []).length ? h('div', { class: 'row wrap', style: 'gap:6px' }, w.inc.map((n) => h('button', { type: 'button', class: 'pill', 'aria-pressed': 'true', 'aria-label': 'Remove ' + n, onclick: () => { w.inc = w.inc.filter((x) => x !== n); render(); } }, n + '  ×'))) : null,
+    h('input', { id: 'wizinc', class: 'inp', type: 'search', placeholder: 'e.g. Kanyakumari', autocomplete: 'off',
+      oninput: suggestFor('wizinc', (n) => { if (!w.inc.includes(n)) w.inc.push(n); render(); }),
+      onkeydown: (e) => { const val = e.target.value.trim(); if (e.key === 'Enter' && val) { if (!w.inc.includes(val)) w.inc.push(val); if (SUG.wizinc) { SUG.wizinc.items = []; SUG.wizinc.q = ''; } render(); } } }),
+    suggestBox('wizinc'),
+    h('label', {}, 'How many days?'),
+    stepper('days', (w.nights + 1) + ' days · ' + w.nights + (w.nights === 1 ? ' night' : ' nights'), () => { w.nights = clamp(w.nights - 1, 1, 30); render(); }, () => { w.nights = clamp(w.nights + 1, 1, 30); render(); }),
     h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Pick the best time for me'), h('div', { class: 'mu sm' }, 'Uses the climate of each place.')), sw(w.best, 'Pick the best time for me', () => { w.best = !w.best; render(); })),
     w.best ? null : h('label', { for: 'wizstart' }, 'Start date'),
     w.best ? null : h('input', { id: 'wizstart', class: 'inp', type: 'date', value: w.start || S.trip.start, onchange: (e) => { if (e.target.value) { w.start = e.target.value; } } }),
@@ -1145,7 +1193,7 @@ function wizardCard() {
   if (w.loading) card.append(h('div', { class: 'line' }, h('span', { class: 'spin' }), ' ' + (w.step || 'Working…')));
   if (w.err) card.append(h('div', { class: 'warnbox sm' }, w.err));
   if (w.tours && w.tours.length) {
-    card.append(h('div', { class: 'line b' }, w.tours.length + ' tours for ' + w.region + ' · ' + w.nights + ' nights from ' + nice(w.startUsed, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })));
+    card.append(h('div', { class: 'line b' }, w.tours.length + ' tours for ' + w.region + ' · ' + (w.nights + 1) + ' days from ' + nice(w.startUsed, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })));
     w.tours.forEach((tr) => {
       card.append(h('div', { style: 'border:1px solid var(--ln);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--sf2)' },
         h('div', { class: 'row between' }, h('div', { class: 'b', style: 'font-size:16px' }, tr.name), chip('₹' + fmt(tr.est.total))),
@@ -1399,7 +1447,7 @@ function viewPlace() {
   if (!s) return [back, empty('This place is no longer in your trip.')];
   const i = S.trip.stops.indexOf(s), r = R[s.key] || {}, v = r.voyage, place = shortName(s), dates = stopDates();
   const out = [back, bannerEl()];
-  if (v && v.v !== 2 && !isBusy(s.key, 'voyage')) researchStop(s, false);
+  if (v && v.v !== 3 && !isBusy(s.key, 'voyage')) researchStop(s, false);
   if (!v) { if (!isBusy(s.key, 'voyage')) researchStop(s, false); return out.concat([h('div', { class: 'card' }, h('div', {}, h('span', { class: 'spin' }), ' Loading ' + place + '…'))]); }
   const must = (S.trip.must || {})[s.key] || [], skipped = (S.trip.skip || {})[s.key] || [];
   const cl = r.climate && r.climate.months[parseIso(dates[i].from).getMonth()];
@@ -1475,7 +1523,7 @@ function viewPlan() {
   list.append(h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: mem.researching ? true : null, onclick: () => planNow(false) }, mem.researching ? 'Researching…' : 'Research my trip'));
   if (st.length) list.append(h('button', { type: 'button', class: 'btn2', onclick: () => planNow(true) }, 'Refresh all research'));
   const summary = planSummaryCard();
-  if (summary) out.splice(2, 0, summary);
+  if (summary) out.splice(1, 0, summary);
   out.push(list);
   if (st.length) { const sc = suggestCard(); if (sc) out.push(sc); out.push(startFinishCard()); }
 
@@ -1572,7 +1620,8 @@ function planSummaryCard() {
       h('div', { class: 'grow' },
         h('button', { type: 'button', style: 'border:0;background:transparent;padding:0;text-align:left;cursor:pointer;color:var(--ac);font-weight:700;text-decoration:underline', onclick: () => openPlace(s.key) }, (i + 1) + '. ' + shortName(s) + ' · ' + s.nights + (s.nights === 1 ? ' night' : ' nights')),
         h('div', { class: 'mu xs' }, nice(dates[i].from) + ' to ' + nice(dates[i].out) + (() => { const cl = R[s.key] && R[s.key].climate && R[s.key].climate.months[parseIso(dates[i].from).getMonth()]; return cl ? ' · ' + cl.tmax + '°, rain ' + cl.rain + '% · ' + verdict(wxScore(cl.tmax, cl.rain))[0] : ''; })()),
-        sights.length ? h('div', { class: 'sm' }, 'See: ' + sights.join(', ')) : h('div', { class: 'sm mu' }, v ? 'No sights listed in the guide.' : 'Guide not loaded yet.'),
+        sights.length ? h('div', { class: 'sm' }, 'See: ' + sights.join(', ')) : h('div', { class: 'warnbox xs' }, v ? 'The travel guide for ' + shortName(s) + ' lists no sights I could read. Tap the name to see what is there, or tell me the place.' : 'Guide not loaded yet.'),
+        v ? h('div', { class: 'mu xs' }, ((v.see || []).length + (v.do || []).length) + ' sights · ' + (v.sleep || []).length + ' hotels · ' + (v.eat || []).length + ' places to eat found') : null,
         modes.length ? h('div', { class: 'sm' }, 'Get around: ' + modes.join(', ')) : null)));
   });
   card.append(h('div', { class: 'line' }, h('div', { class: 'b sm' }, 'First days'),
@@ -2102,7 +2151,7 @@ document.getElementById('install').addEventListener('click', installApp);
 document.getElementById('gear').addEventListener('click', () => set((s) => { if (s.tab !== 'settings') s.back = s.tab; s.tab = 'settings'; }));
 render();
 ensureRates().then(render).catch(() => {});
-if (S.trip.stops.some((s) => !s.geo || !(R[s.key] && R[s.key].voyage && R[s.key].voyage.v === 2))) researchAll(false);
+if (S.trip.stops.some((s) => !s.geo || !(R[s.key] && R[s.key].voyage && R[s.key].voyage.v === 3))) researchAll(false);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
