@@ -21,7 +21,7 @@ a{color:var(--ac)}
 #app{height:100dvh;display:flex;flex-direction:column;max-width:600px;margin:0 auto}
 header{flex:none;display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px}
 .brand{font-family:Sora,Manrope,sans-serif;font-weight:700;font-size:20px;letter-spacing:-.01em}
-main{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 28px;display:flex;flex-direction:column;gap:14px}
+main{flex:1;min-height:0;overflow-y:auto;padding:4px 16px 96px;display:flex;flex-direction:column;gap:14px}
 nav{flex:none;display:flex;background:var(--sf);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
 nav button{flex:1;min-height:58px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;font-weight:700;color:var(--mu);cursor:pointer}
 nav button[aria-current="page"]{color:var(--ac)}
@@ -73,6 +73,12 @@ ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .kv>:last-child{font-weight:700;text-align:right}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--ln);border-top-color:var(--ac);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));width:min(560px,calc(100% - 32px));box-sizing:border-box;background:var(--ink);color:var(--bg);border-radius:14px;padding:12px 16px;font-weight:600;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.fab{position:fixed;right:max(16px,calc(50% - 284px));bottom:calc(74px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:28px;border:0;background:var(--ac);color:var(--onac);font-size:26px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;z-index:20}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:600px;max-height:88dvh;overflow-y:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
@@ -88,6 +94,9 @@ ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
   <main id="main" tabindex="-1"></main>
   <nav id="nav" aria-label="Sections"></nav>
 </div>
+<button class="fab" id="fab" type="button" aria-label="Quick actions: add a place, best order, compare plans">＋</button>
+<div id="sheet"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
 'use strict';
 /* ============================================================
@@ -646,25 +655,103 @@ function legLinks(l) {
   }
   return links;
 }
-function bestOrder() {
-  const st = S.trip.stops;
-  if (st.length < 2) return set((s) => { s.banner = 'Add at least two places to find a better order.'; });
-  if (st.some((s) => !s.geo)) return set((s) => { s.banner = 'Research the places first so I know where they are.'; });
-  if (st.length > 7) return set((s) => { s.banner = 'Best order works for up to 7 places.'; });
+function routeKm(stops) {
   const home = homePt();
-  const total = (arr) => { const p = [home].concat(arr.map(stopPt), [home]); let t = 0; for (let i = 0; i < p.length - 1; i++) t += hav(p[i], p[i + 1]); return t * 1.3; };
+  const p = [home].concat(stops.map(stopPt), [home]);
+  if (p.some((x) => !x)) return null;
+  let tkm = 0; for (let i = 0; i < p.length - 1; i++) tkm += hav(p[i], p[i + 1]);
+  return tkm * 1.3;
+}
+function bestOrderStops(stops) {
+  if (stops.length < 2 || stops.some((s) => !s.geo)) return null;
   let best = null, bestT = Infinity;
   const perm = (rest, cur) => {
-    if (!rest.length) { const t = total(cur); if (t < bestT - 0.001) { bestT = t; best = cur; } return; }
+    if (!rest.length) { const v = routeKm(cur); if (v < bestT - 0.001) { bestT = v; best = cur; } return; }
     rest.forEach((x, i) => perm(rest.slice(0, i).concat(rest.slice(i + 1)), cur.concat([x])));
   };
-  perm(st, []);
-  const now = total(st);
+  if (stops.length <= 7) perm(stops, []);
+  else { // nearest neighbour for big trips
+    const left = stops.slice(); let cur = homePt(); best = [];
+    while (left.length) { left.sort((a, b) => hav(cur, stopPt(a)) - hav(cur, stopPt(b))); const nx = left.shift(); best.push(nx); cur = stopPt(nx); }
+    bestT = routeKm(best);
+  }
+  return { stops: best, km: bestT };
+}
+async function waitIdle(ms) { const t0 = Date.now(); while (Object.values(busy).some((b) => Object.values(b).some(Boolean)) && Date.now() - t0 < (ms || 60000)) await new Promise((r) => setTimeout(r, 250)); }
+async function bestOrder() {
+  if (S.trip.stops.length < 2) return set((s) => { s.banner = 'Add at least two places to find a better order.'; });
+  if (S.trip.stops.some((s) => !s.geo)) {
+    toast('Locating your places first…');
+    await researchAll(false); await waitIdle(45000);
+  }
+  const missing = S.trip.stops.filter((s) => !s.geo).map(shortName);
+  if (missing.length) return set((s) => { s.banner = 'Could not locate ' + missing.join(', ') + '. Tap Retry under it on the Plan tab, then try again.'; });
+  const now = routeKm(S.trip.stops);
+  const r = bestOrderStops(S.trip.stops);
   set((s) => {
-    if (bestT >= now - 5) { s.banner = 'Your order is already the shortest loop from home and back.'; return; }
-    s.trip.stops = best; s.trip.swaps = {};
-    s.banner = 'Re-ordered: ' + best.map(shortName).join(', ') + '. Saves about ' + fmt(now - bestT) + ' km. Legs, costs and days re-planned.';
+    if (!r || r.km >= now - 5) { s.banner = 'Your order is already the shortest loop: ' + [s.settings.home.name].concat(s.trip.stops.map(shortName), [s.settings.home.name]).join(' → ') + ' (about ' + fmt(now) + ' km).'; return; }
+    s.trip.stops = r.stops; s.trip.swaps = {}; s.trip.legModes = {};
+    s.banner = 'Best order: ' + [s.settings.home.name].concat(r.stops.map(shortName), [s.settings.home.name]).join(' → ') + '. Saves about ' + fmt(now - r.km) + ' km. Every tab is updated.';
   });
+}
+
+/* ---------- compare plans ---------- */
+function withPlan(trip, patch, fn) {
+  const t0 = S.trip, s0 = S.settings;
+  S.trip = trip; S.settings = Object.assign({}, s0, patch || {});
+  try { return fn(); } finally { S.trip = t0; S.settings = s0; }
+}
+function planVariants() {
+  const base = structuredClone(S.trip);
+  const L = legs();
+  const cheap = {}, fast = {};
+  L.forEach((l) => { cheap[l.key] = l.opts.reduce((a, b) => (b.fare < a.fare ? b : a)).m; fast[l.key] = l.opts.reduce((a, b) => (b.hrs < a.hrs ? b : a)).m; });
+  const seedOf = (k) => (base.seed || 1) * 7 + k * 101;
+  const vs = [
+    { id: 'yours', name: 'Your plan', note: 'Exactly as you set it.', trip: base, patch: {} },
+    { id: 'budget', name: 'Budget saver', note: 'Cheapest way between places, budget stays and food.', trip: Object.assign(structuredClone(base), { legModes: cheap, seed: seedOf(1) }), patch: { budget: 'budget' } },
+    { id: 'fast', name: 'Fastest', note: 'Least time travelling, comfort stays.', trip: Object.assign(structuredClone(base), { legModes: fast, seed: seedOf(2) }), patch: { budget: S.settings.budget === 'budget' ? 'comfort' : S.settings.budget } }
+  ];
+  const bo = bestOrderStops(base.stops);
+  if (bo && routeKm(base.stops) - bo.km > 5) vs.push({ id: 'short', name: 'Shortest route', note: 'Same places, in the order with the least travel.', trip: Object.assign(structuredClone(base), { stops: bo.stops, legModes: {}, swaps: {}, seed: seedOf(3) }), patch: {} });
+  vs.push({ id: 'relaxed', name: 'Relaxed', note: 'One extra night at each place, slower days.', trip: Object.assign(structuredClone(base), { stops: base.stops.map((s) => Object.assign({}, s, { nights: Math.min(21, s.nights + 1) })), swaps: {}, seed: seedOf(4) }), patch: {} });
+  vs.push({ id: 'mix', name: 'Different sights', note: 'Same route and dates, a fresh mix of sights and food.', trip: Object.assign(structuredClone(base), { swaps: {}, seed: 2 + Math.floor(((base.seed || 1) * 9301 + 49297) % 233280) * 4099 }), patch: {} });
+  return vs.map((v) => withPlan(v.trip, v.patch, () => {
+    const c = costs(), lg = legs(), days = itinerary();
+    const modes = {}; lg.forEach((l) => { modes[l.sel.label] = (modes[l.sel.label] || 0) + 1; });
+    return Object.assign(v, {
+      total: c.total, nights: totalNights(), travelH: lg.reduce((a, l) => a + l.sel.hrs, 0), km: routeKm(v.trip.stops),
+      route: v.trip.stops.map(shortName).join(' → '),
+      modes: Object.entries(modes).map(([k, n]) => n + ' × ' + k).join(', '),
+      highlights: days.flatMap((d) => d.items.filter((x) => x.tag === 'See').map((x) => x.title)).filter((x, i, a) => a.indexOf(x) === i).slice(0, 4)
+    });
+  }));
+}
+function usePlan(v) {
+  set((s) => { s.trip = structuredClone(v.trip); if (v.patch && v.patch.budget) s.settings.budget = v.patch.budget; s.tab = 'trip'; s.banner = 'Now using "' + v.name + '". Every tab is updated.'; });
+}
+function viewCompare() {
+  const out = [h('button', { type: 'button', class: 'btn2', style: 'align-self:flex-start;border:0', onclick: () => go(S.back && S.back !== 'compare' ? S.back : 'trip') }, '‹ Back'),
+    h('h1', {}, 'Compare plans'), h('p', { class: 'mu', style: 'margin:0' }, 'Different ways to do the same trip. Tap "Use this plan" and every tab switches to it.')];
+  if (!S.trip.stops.length) { out.push(empty()); return out; }
+  if (S.trip.stops.some((s) => !s.geo)) { out.push(h('div', { class: 'card' }, h('div', {}, 'Research your places first.'), h('button', { type: 'button', class: 'btn', onclick: () => planNow(false) }, 'Research my trip'))); return out; }
+  const vs = planVariants();
+  const cheapest = Math.min(...vs.map((v) => v.total)), quickest = Math.min(...vs.map((v) => v.travelH));
+  vs.forEach((v) => {
+    out.push(h('div', { class: 'card' + (v.id === 'yours' ? ' hl' : '') },
+      h('div', { class: 'row between' }, h('h2', {}, v.name), h('div', { class: 'row', style: 'gap:6px' }, v.total === cheapest ? chip('Cheapest') : null, v.travelH === quickest ? chip('Least travel', 'plain') : null)),
+      h('div', { class: 'mu sm' }, v.note),
+      h('div', { class: 'grid2' },
+        statBox('Total', '₹' + fmt(v.total)), statBox('Nights', String(v.nights)),
+        statBox('Travel time', fmtH(v.travelH)), statBox('Distance', v.km ? fmt(v.km) + ' km' : '–')),
+      h('div', { class: 'sm' }, h('b', {}, 'Route: '), v.route),
+      h('div', { class: 'sm' }, h('b', {}, 'Getting there: '), v.modes || '–'),
+      v.highlights.length ? h('div', { class: 'sm' }, h('b', {}, 'Highlights: '), v.highlights.join(', ')) : null,
+      v.id === 'yours' ? chip('Current plan', 'plain') : h('button', { type: 'button', class: 'btn', onclick: () => usePlan(v) }, 'Use this plan')));
+  });
+  out.push(h('button', { type: 'button', class: 'btn2', onclick: () => { S.trip.seed = 2 + Math.floor(Math.random() * 1e9); save(); render(); } }, '🔀 Show more options'),
+    h('div', { class: 'mu xs' }, 'Costs and travel times are estimates from distance and your budget style.'));
+  return out;
 }
 
 /* ---------- costs (estimates the user can edit) ---------- */
@@ -980,9 +1067,13 @@ function renderNow() {
   const main = document.getElementById('main');
   const keepScroll = main.dataset.tab === S.tab ? main.scrollTop : 0;
   const ae = document.activeElement;
-  const focus = ae && ae.id && main.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) ? { id: ae.id, value: ae.value, s: ae.selectionStart, e: ae.selectionEnd } : null;
+  const focus = ae && ae.id && (main.contains(ae) || document.getElementById('sheet').contains(ae)) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) ? { id: ae.id, value: ae.value, s: ae.selectionStart, e: ae.selectionEnd } : null;
   main.replaceChildren();
-  const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings }[S.tab] || viewPlan;
+  renderSheet();
+  if (S.banner && S.banner !== mem.lastToast) { mem.lastToast = S.banner; toast(S.banner); }
+  if (!S.banner) mem.lastToast = '';
+  document.getElementById('fab').hidden = S.tab === 'settings' || !!mem.sheet;
+  const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings, compare: viewCompare }[S.tab] || viewPlan;
   try { view().forEach((n) => n && main.append(n)); }
   catch (e) { main.append(h('div', { class: 'card' }, h('h2', {}, 'Something went wrong'), h('div', { class: 'sm' }, String(e && e.message || e)))); console.error(e); }
   main.dataset.tab = S.tab;
@@ -1125,6 +1216,7 @@ function planSummaryCard() {
     h('div', { class: 'row wrap' },
       h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.tab = 'days'; s.dsub = 'plan'; s.banner = ''; }) }, 'Day-by-day plan'),
       h('button', { type: 'button', class: 'btn2', onclick: differentPlan }, '🔀 Different plan'),
+      h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.back = s.tab; s.tab = 'compare'; }) }, '⚖️ Compare plans'),
       h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'route'; s.banner = ''; }) }, 'Travel and local transport'),
       h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'trip'; s.banner = ''; }) }, 'Costs and checks')));
   return card;
@@ -1222,6 +1314,7 @@ function viewTrip() {
     h('div', { class: 'big' }, S.trip.stops.map(shortName).join(' → ')),
     h('div', { class: 'row', style: 'align-items:baseline' }, h('div', { class: 'big', style: 'font-size:32px' }, '₹' + fmt(c.total)), h('div', { class: 'sm', style: 'opacity:.85' }, 'estimated total'))));
 
+  out.push(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.back = 'trip'; s.tab = 'compare'; }) }, '⚖️ Compare plans'), h('button', { type: 'button', class: 'btn2', onclick: differentPlan }, '🔀 Different plan'), S.trip.stops.length > 1 ? h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, '🧭 Best order') : null));
   // Claude check
   const ck = S.check;
   const checkCard = h('div', { class: 'card hl' }, h('div', { class: 'row between' }, h('h2', {}, 'Check my plan with Claude'), chip('Paid', 'warn')),
@@ -1586,6 +1679,46 @@ async function importPlans(file) {
     set((s) => { const names = new Set(s.plans.map((p) => p.name)); j.plans.forEach((p) => { if (p && p.trip && !names.has(p.name)) s.plans.push(p); }); s.banner = 'Imported ' + j.plans.length + ' plans.'; });
   } catch (e) { set((s) => { s.banner = 'Import failed: ' + e.message; }); }
 }
+
+/* ---------- toast and quick actions (available on every tab) ---------- */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 5000);
+}
+function openSheet() { mem.sheet = true; render(); setTimeout(() => { const el = document.getElementById('qadd'); if (el) el.focus(); }, 80); }
+function closeSheet() { mem.sheet = false; render(); }
+function renderSheet() {
+  const host = document.getElementById('sheet');
+  if (!mem.sheet) { host.replaceChildren(); return; }
+  const st = S.trip.stops;
+  const run = (fn) => () => { mem.sheet = false; fn(); };
+  const qadd = h('input', { id: 'qadd', class: 'inp', type: 'search', placeholder: 'Type a place, e.g. Alleppey', autocomplete: 'off', value: (SUG.qadd && SUG.qadd.q) || '',
+    oninput: suggestFor('qadd', (n) => { addStop(n); toast('Added ' + n + '. Every tab is updating.'); }),
+    onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) { addStop(e.target.value); if (SUG.qadd) { SUG.qadd.q = ''; SUG.qadd.items = []; } render(); } } });
+  const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Quick actions', onclick: (e) => e.stopPropagation() },
+    h('div', { class: 'row between' }, h('h2', {}, 'Quick actions'), h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Close', onclick: closeSheet }, '×')),
+    h('div', { class: 'mu sm' }, st.length ? [S.settings.home.name].concat(st.map(shortName), [S.settings.home.name]).join(' → ') : 'No places yet.'),
+    h('label', { for: 'qadd' }, 'Search and add a place'), qadd, suggestBox('qadd'),
+    h('div', { class: 'grid2' },
+      h('button', { type: 'button', class: 'btn', onclick: run(() => planNow(false)) }, '🔎 Research my trip'),
+      h('button', { type: 'button', class: 'btn2', disabled: st.length < 2 ? true : null, onclick: run(bestOrder) }, '🧭 Best order'),
+      h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(differentPlan) }, '🔀 Different plan'),
+      h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => set((s) => { if (s.tab !== 'compare') s.back = s.tab; s.tab = 'compare'; })) }, '⚖️ Compare plans'),
+      h('button', { type: 'button', class: 'btn2', onclick: run(() => { set((s) => { s.tab = 'plan'; }); setTimeout(() => { const m = document.getElementById('main'); m.scrollTop = 0; const el = document.getElementById('explore'); if (el) el.focus(); }, 120); }) }, '🗺️ Explore a place'),
+      h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => set((s) => { s.tab = 'days'; s.dsub = 'plan'; })) }, '📅 Day plan')),
+    h('h3', {}, 'Ready-made plans'),
+    h('div', { class: 'row wrap', style: 'gap:6px' }, PRESETS.map((p) => h('button', { type: 'button', class: 'pill', onclick: run(() => loadPreset(p)) }, p.name))),
+    st.length ? h('details', {}, h('summary', {}, 'Your places (' + st.length + ')'), st.map((s, i) => h('div', { class: 'row line' }, h('span', { class: 'num' }, i + 1), h('div', { class: 'grow b' }, shortName(s)),
+      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => set((x) => { const a = x.trip.stops; [a[i - 1], a[i]] = [a[i], a[i - 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '.'; }) }, '↑'),
+      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move later', disabled: i === st.length - 1, onclick: () => set((x) => { const a = x.trip.stops; [a[i + 1], a[i]] = [a[i], a[i + 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '.'; }) }, '↓'),
+      h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + shortName(s), onclick: () => set((x) => { x.trip.stops.splice(i, 1); x.trip.swaps = {}; x.banner = 'Removed ' + shortName(s) + '.'; }) }, '×')))) : null);
+  host.replaceChildren(h('div', { class: 'sheet-bg', onclick: closeSheet }, sheet));
+}
+document.getElementById('fab').addEventListener('click', openSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mem.sheet) closeSheet(); });
 
 /* ---------- install ---------- */
 let installEvt = null;
