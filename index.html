@@ -80,7 +80,10 @@ ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 <div id="app">
   <header>
     <div class="brand">Trip Desk</div>
-    <button class="ibtn" id="gear" type="button" aria-label="Settings and saved plans">⚙️</button>
+    <div class="row" style="gap:8px">
+      <button class="btn" id="install" type="button" hidden style="min-height:40px;padding:0 12px;font-size:14px">Install app</button>
+      <button class="ibtn" id="gear" type="button" aria-label="Settings and saved plans">⚙️</button>
+    </div>
   </header>
   <main id="main" tabindex="-1"></main>
   <nav id="nav" aria-label="Sections"></nav>
@@ -1506,6 +1509,13 @@ function viewSettings() {
   return [
     h('button', { type: 'button', class: 'btn2', style: 'align-self:flex-start;border:0', onclick: () => go(S.back || 'plan') }, '‹ Back'),
     h('h1', {}, 'Settings'), bannerEl(),
+    isStandalone() ? null : h('div', { class: 'card hl' }, h('h2', {}, 'Install on your phone'),
+      installEvt ? h('button', { type: 'button', class: 'btn', onclick: installApp }, 'Install Trip Desk') : null,
+      h('ul', { class: 'clean sm' },
+        h('li', {}, h('b', {}, 'Chrome: '), 'tap ⋮ (top right) → "Add to home screen" or "Install app" → Install.'),
+        h('li', {}, h('b', {}, 'Samsung Internet: '), 'tap ≡ (bottom right) → "Add page to" → "Home screen".'),
+        h('li', {}, h('b', {}, 'Opened from WhatsApp, Gmail or GitHub? '), 'Those open a mini browser with no install option. Tap ⋮ → "Open in Chrome" first.')),
+      h('div', { class: 'mu xs' }, 'Address: banerjeetara-tech.github.io/trip-desk')),
     h('div', { class: 'card' }, h('h2', {}, 'Saved plans'), h('div', { class: 'mu sm' }, 'Each plan keeps its places, dates and choices on this phone.'),
       S.plans.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu xs' }, p.meta)),
         h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.trip = structuredClone(p.trip); s.tab = 'trip'; s.banner = 'Opened "' + p.name + '".'; }) }, 'Open'),
@@ -1547,6 +1557,17 @@ async function importPlans(file) {
     set((s) => { const names = new Set(s.plans.map((p) => p.name)); j.plans.forEach((p) => { if (p && p.trip && !names.has(p.name)) s.plans.push(p); }); s.banner = 'Imported ' + j.plans.length + ' plans.'; });
   } catch (e) { set((s) => { s.banner = 'Import failed: ' + e.message; }); }
 }
+
+/* ---------- install ---------- */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; document.getElementById('install').hidden = false; render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; document.getElementById('install').hidden = true; set((s) => { s.banner = 'Trip Desk is installed. Open it from your home screen.'; }); });
+async function installApp() {
+  if (installEvt) { installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; document.getElementById('install').hidden = true; return; }
+  set((s) => { s.tab = 'settings'; });
+}
+function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+document.getElementById('install').addEventListener('click', installApp);
 
 /* ---------- start ---------- */
 document.getElementById('gear').addEventListener('click', () => set((s) => { if (s.tab !== 'settings') s.back = s.tab; s.tab = 'settings'; }));
