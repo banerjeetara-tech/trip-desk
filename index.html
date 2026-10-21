@@ -872,12 +872,14 @@ function viewPlan() {
       Object.values((r.err) || {}).some(Boolean) ? h('div', { class: 'warnbox xs' }, Object.entries(r.err).filter(([, v]) => v).map(([k, v]) => ({ geo: 'Location', voyage: 'Guide', climate: 'Climate', cur: 'Currency' }[k] || k) + ': ' + v).join(' · ')) : null,
       Object.values((r.err) || {}).some(Boolean) ? h('button', { type: 'button', class: 'btn2', onclick: () => { R[s.key] = { err: {}, at: {}, alts: [] }; set((x) => { x.trip.stops[i].geo = null; }); researchStop(S.trip.stops[i], true); } }, 'Retry ' + shortName(s)) : null));
   });
-  const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', onkeydown: (e) => { if (e.key === 'Enter') { addStop(e.target.value); } } });
+  const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', value: mem.draft || '', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', oninput: (e) => { mem.draft = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') { mem.draft = ''; addStop(e.target.value); } } });
   list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: 'newstop' }, 'Add a place'),
-    h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => addStop(inp.value) }, 'Add'))));
+    h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => { mem.draft = ''; addStop(inp.value); } }, 'Add'))));
   if (st.length >= 2) list.append(h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, 'Find the best order'));
-  if (st.length) list.append(h('button', { type: 'button', class: 'btn', onclick: () => researchAll(false) }, 'Research my trip'),
-    h('button', { type: 'button', class: 'btn2', onclick: () => researchAll(true) }, 'Refresh all research'));
+  list.append(h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: mem.researching ? true : null, onclick: () => planNow(false) }, mem.researching ? 'Researching…' : 'Research my trip'));
+  if (st.length) list.append(h('button', { type: 'button', class: 'btn2', onclick: () => planNow(true) }, 'Refresh all research'));
+  const summary = planSummaryCard();
+  if (summary) out.splice(2, 0, summary);
   out.push(list);
 
   out.push(h('div', { class: 'card' }, h('h2', {}, 'Dates and travellers'),
@@ -896,6 +898,55 @@ function viewPlan() {
     PRESETS.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu sm' }, p.note + ' ' + p.stops.reduce((a, x) => a + x[1], 0) + ' nights.')),
       h('button', { type: 'button', class: 'btn2', onclick: () => loadPreset(p) }, 'Use')))));
   return out;
+}
+async function planNow(force) {
+  if (mem.draft && mem.draft.trim()) { const d = mem.draft; mem.draft = ''; addStop(d); }
+  if (!S.trip.stops.length) { set((s) => { s.banner = 'Type a place in "Add a place" first, for example Kanyakumari.'; }); return; }
+  mem.researching = true; mem.showPlan = true; render();
+  try {
+    await researchAll(force);
+    const t0 = Date.now();
+    while (Object.values(busy).some((b) => Object.values(b).some(Boolean)) && Date.now() - t0 < 90000) await new Promise((r) => setTimeout(r, 250));
+    await researchAll(false);
+  } finally { mem.researching = false; }
+  const ok = S.trip.stops.filter((s) => R[s.key] && R[s.key].voyage).length;
+  set((s) => { s.banner = ok ? 'Your plan is ready. It is at the top of this page; the full version is on the Days, Route and Trip tabs.' : 'Research finished, but the travel guide could not be loaded. See the red notes under each place.'; });
+  const m = document.getElementById('main'); if (m) m.scrollTop = 0;
+}
+function planSummaryCard() {
+  const st = S.trip.stops;
+  if (!st.length) return null;
+  const anyBusy = st.some((s) => busy[s.key] && Object.values(busy[s.key]).some(Boolean));
+  const ready = st.filter((s) => R[s.key] && R[s.key].voyage);
+  if (mem.researching || anyBusy) {
+    const done = st.filter((s) => R[s.key] && (R[s.key].voyage || (R[s.key].err && R[s.key].err.voyage))).length;
+    return h('div', { class: 'card hl' }, h('h2', {}, 'Building your plan…'), h('div', {}, h('span', { class: 'spin', 'aria-hidden': 'true' }), ' Researching ' + done + ' of ' + st.length + ' places. This takes 10 to 30 seconds.'));
+  }
+  if (!ready.length) return null;
+  const n = totalNights(), c = costs(), dates = stopDates();
+  const days = itinerary();
+  const card = h('div', { class: 'card hl' },
+    h('div', { class: 'row between' }, h('h2', {}, 'Your plan'), chip(n + ' nights')),
+    h('div', { class: 'sm' }, nice(S.trip.start) + ' to ' + nice(addDays(S.trip.start, n)) + ' · ' + S.trip.travellers + ' travellers · about ₹' + fmt(c.total) + ' in total'));
+  st.forEach((s, i) => {
+    const v = R[s.key] && R[s.key].voyage;
+    const sights = v ? (v.see || []).concat(v.do || []).slice(0, 3).map((x) => x.name) : [];
+    const modes = v ? (v.modes || []).slice(0, 4).map((m) => m.name) : [];
+    card.append(h('div', { class: 'line', style: 'display:flex;gap:12px;align-items:flex-start' },
+      v && v.image ? h('img', { class: 'thumb', src: v.image, alt: shortName(s), loading: 'lazy' }) : h('div', { class: 'thumb', 'aria-hidden': 'true' }, '📍'),
+      h('div', { class: 'grow' },
+        h('div', { class: 'b' }, (i + 1) + '. ' + shortName(s) + ' · ' + s.nights + (s.nights === 1 ? ' night' : ' nights')),
+        h('div', { class: 'mu xs' }, nice(dates[i].from) + ' to ' + nice(dates[i].out)),
+        sights.length ? h('div', { class: 'sm' }, 'See: ' + sights.join(', ')) : h('div', { class: 'sm mu' }, v ? 'No sights listed in the guide.' : 'Guide not loaded yet.'),
+        modes.length ? h('div', { class: 'sm' }, 'Get around: ' + modes.join(', ')) : null)));
+  });
+  card.append(h('div', { class: 'line' }, h('div', { class: 'b sm' }, 'First days'),
+    days.slice(0, 3).map((d, k) => h('div', { class: 'sm' }, 'Day ' + (k + 1) + ' · ' + d.title + ': ' + d.items.map((x) => x.title).join(' → ')))),
+    h('div', { class: 'row wrap' },
+      h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.tab = 'days'; s.dsub = 'plan'; s.banner = ''; }) }, 'Day-by-day plan'),
+      h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'route'; s.banner = ''; }) }, 'Travel and local transport'),
+      h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'trip'; s.banner = ''; }) }, 'Costs and checks')));
+  return card;
 }
 function bestMonths() {
   const months = Array.from({ length: 12 }, () => ({ score: 0, n: 0 }));
