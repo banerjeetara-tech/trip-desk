@@ -772,30 +772,58 @@ function loadPreset(p) {
 
 
 /* ---------- Explore: type a place, see what is there, tap to add ---------- */
-let suggestTimer = null;
-function exploreInput(e) {
-  mem.exploreQ = e.target.value;
-  clearTimeout(suggestTimer);
-  const q = mem.exploreQ.trim();
-  const box = document.getElementById('sugg');
-  if (q.length < 2) { mem.suggest = []; if (box) box.replaceChildren(); return; }
-  suggestTimer = setTimeout(async () => {
-    try {
-      const j = await getJSON(WV + '&action=opensearch&limit=7&namespace=0&search=' + enc(q), 8000);
-      if (mem.exploreQ.trim() !== q) return;
-      mem.suggest = (j && j[1]) || [];
-    } catch (err) { mem.suggest = []; }
-    const b = document.getElementById('sugg');
-    if (b) b.replaceChildren(...suggestButtons());
-  }, 300);
+/* Search-engine style suggestions: tolerant of spelling (aleppy -> Alappuzha), places only */
+const SUG = {};   // inputId -> { q, items, timer }
+async function placeSuggestions(q) {
+  const WP = 'https://en.wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&redirects=1&prop=coordinates|description&colimit=20';
+  const fuzzy = q.split(/\s+/).filter(Boolean).map((w) => (w.length >= 4 ? w + '~' : w)).join(' ');
+  const [pre, srch, wv] = await Promise.all([
+    getJSON(WP + '&action=query&generator=prefixsearch&gpslimit=10&gpsprofile=fuzzy&gpssearch=' + enc(q), 8000).catch(() => null),
+    getJSON(WP + '&action=query&generator=search&gsrnamespace=0&gsrlimit=10&gsrsearch=' + enc(fuzzy), 8000).catch(() => null),
+    getJSON(WV + '&action=opensearch&limit=8&namespace=0&profile=fuzzy&search=' + enc(q), 8000).catch(() => null)
+  ]);
+  const out = [], seen = new Set();
+  const addWiki = (j) => (((j && j.query && j.query.pages) || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0))).forEach((pg) => {
+    if (!pg.coordinates || !pg.coordinates.length) return;          // keep real places only
+    const name = pg.title.replace(/\s*\(.*\)$/, '');
+    const k = norm(name);
+    if (seen.has(k)) return; seen.add(k);
+    out.push({ name, desc: pg.description || '' });
+  });
+  addWiki(pre); addWiki(srch);
+  ((wv && wv[1]) || []).forEach((tl) => { const k = norm(tl.split('/')[0]); if (!seen.has(k)) { seen.add(k); out.push({ name: tl.split('/')[0], desc: 'Travel guide' }); } });
+  const homeC = norm(S.settings.home.country || 'India');
+  const nq = norm(q);
+  const score = (it) => (norm(it.name).startsWith(nq) ? 2 : 0) + (homeC && norm(it.desc).includes(homeC) ? 3 : 0);
+  return out.map((it, i) => ({ it, i, s: score(it) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.it).slice(0, 8);
 }
-function suggestButtons() {
-  return (mem.suggest || []).map((name) => h('button', { type: 'button', class: 'pill', style: 'text-align:left', onclick: () => explore(name) }, '📍 ' + name));
+function suggestFor(inputId, onPick) {
+  return (e) => {
+    const st = SUG[inputId] || (SUG[inputId] = {});
+    st.q = e.target.value; st.pick = onPick;
+    clearTimeout(st.timer);
+    const q = st.q.trim();
+    if (q.length < 3) { st.items = []; fillSuggest(inputId); return; }
+    st.timer = setTimeout(async () => {
+      const items = await placeSuggestions(q).catch(() => []);
+      if ((SUG[inputId] || {}).q.trim() !== q) return;
+      st.items = items; fillSuggest(inputId);
+    }, 280);
+  };
 }
+function suggestBox(inputId) { return h('div', { id: 'sugg-' + inputId, role: 'listbox', 'aria-label': 'Suggestions', style: 'display:flex;flex-direction:column;gap:4px' }, suggestRows(inputId)); }
+function suggestRows(inputId) {
+  const st = SUG[inputId];
+  if (!st || !st.items || !st.items.length) return [];
+  return st.items.map((it) => h('button', { type: 'button', role: 'option', style: 'display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:48px;padding:8px 12px;border:1px solid var(--ln);border-radius:12px;background:var(--sf2);text-align:left;cursor:pointer;width:100%', onclick: () => { const pick = st.pick; st.items = []; st.q = ''; pick(it.name); } },
+    h('span', { class: 'b' }, '📍 ' + it.name), it.desc ? h('span', { class: 'mu xs' }, it.desc) : null));
+}
+function fillSuggest(inputId) { const b = document.getElementById('sugg-' + inputId); if (b) b.replaceChildren(...suggestRows(inputId)); }
+function exploreInput(e) { mem.exploreQ = e.target.value; suggestFor('explore', (n) => explore(n))(e); }
 async function explore(name) {
   name = String(name || '').trim();
   if (!name) return;
-  mem.exploreQ = name; mem.suggest = []; mem.exploreKey = keyOf(name); mem.exploreName = name;
+  mem.exploreQ = name; if (SUG.explore) SUG.explore.items = []; mem.exploreKey = keyOf(name); mem.exploreName = name;
   const key = mem.exploreKey;
   render();
   if (!(R[key] && R[key].voyage)) await task(key, 'voyage', () => fetchVoyage({ name, geo: null }));
@@ -830,7 +858,7 @@ function exploreCard() {
     h('div', { class: 'mu sm' }, 'Type a city, state or country. Pick it from the list to see its towns and sights, then tap Add.'));
   const inp = h('input', { id: 'explore', class: 'inp', type: 'search', value: mem.exploreQ || '', placeholder: 'e.g. Kerala, Thailand, Kanyakumari', autocomplete: 'off', oninput: exploreInput, onkeydown: (e) => { if (e.key === 'Enter') explore(e.target.value); } });
   card.append(h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => explore(inp.value) }, 'Explore')),
-    h('div', { id: 'sugg', class: 'row wrap', style: 'gap:6px' }, suggestButtons()));
+    suggestBox('explore'));
   const key = mem.exploreKey;
   if (!key) return card;
   const name = mem.exploreName;
@@ -1014,9 +1042,9 @@ function viewPlan() {
       Object.values((r.err) || {}).some(Boolean) ? h('button', { type: 'button', class: 'btn2', onclick: () => { R[s.key] = { err: {}, at: {}, alts: [] }; set((x) => { x.trip.stops[i].geo = null; }); researchStop(S.trip.stops[i], true); } }, 'Retry ' + shortName(s)) : null));
     if (i < st.length - 1) list.append(insertBetween(i + 1, shortName(s), shortName(st[i + 1])));
   });
-  const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', value: mem.draft || '', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', oninput: (e) => { mem.draft = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') { mem.draft = ''; addStop(e.target.value); } } });
+  const inp = h('input', { id: 'newstop', class: 'inp', type: 'text', value: mem.draft || '', placeholder: 'Add a place, e.g. Kanyakumari or Bangkok', autocomplete: 'off', oninput: (e) => { mem.draft = e.target.value; suggestFor('newstop', (n) => { mem.draft = ''; addStop(n); })(e); }, onkeydown: (e) => { if (e.key === 'Enter') { mem.draft = ''; addStop(e.target.value); } } });
   list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: 'newstop' }, 'Add a place'),
-    h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => { mem.draft = ''; addStop(inp.value); } }, 'Add'))));
+    h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => { mem.draft = ''; addStop(inp.value); } }, 'Add')), suggestBox('newstop')));
   if (st.length >= 2) list.append(h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, 'Find the best order'));
   list.append(h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: mem.researching ? true : null, onclick: () => planNow(false) }, mem.researching ? 'Researching…' : 'Research my trip'));
   if (st.length) list.append(h('button', { type: 'button', class: 'btn2', onclick: () => planNow(true) }, 'Refresh all research'));
@@ -1046,7 +1074,8 @@ function insertBetween(at, a, b) {
   const go = () => { const el = document.getElementById('ins' + at); const v = el && el.value; mem.insertAt = null; if (v && v.trim()) addStop(v, at); else render(); };
   return h('div', { class: 'banner', style: 'display:flex;flex-direction:column;gap:8px' },
     h('label', { for: 'ins' + at }, 'New place between ' + a + ' and ' + b),
-    h('input', { id: 'ins' + at, class: 'inp', type: 'text', placeholder: 'e.g. Madurai', autocomplete: 'off', onkeydown: (e) => { if (e.key === 'Enter') go(); } }),
+    h('input', { id: 'ins' + at, class: 'inp', type: 'text', placeholder: 'e.g. Madurai', autocomplete: 'off', oninput: suggestFor('ins' + at, (n) => { mem.insertAt = null; addStop(n, at); }), onkeydown: (e) => { if (e.key === 'Enter') go(); } }),
+    suggestBox('ins' + at),
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn', onclick: go }, 'Add here'), h('button', { type: 'button', class: 'btn2', onclick: () => { mem.insertAt = null; render(); } }, 'Cancel')));
 }
 async function planNow(force) {
