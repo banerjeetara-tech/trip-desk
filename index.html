@@ -646,11 +646,24 @@ function legOptions(a, b) {
   const india = same && a.cc === 'IN';
   const opts = [];
   if (same && road < 3500) {
-    opts.push({ m: 'train', label: india ? 'Train (3AC)' : 'Train', hrs: road / 55, fare: Math.round(road * (india ? 1.5 : 2.2) / 50) * 50 });
-    opts.push({ m: 'bus', label: india ? 'AC sleeper bus' : 'Bus', hrs: road / 42, fare: Math.round(road * (india ? 1.6 : 2) / 50) * 50 });
+    if (road >= 150) opts.push({ m: 'train', label: india ? 'Train (3AC)' : 'Train', hrs: road / 55, fare: Math.round(road * (india ? 1.5 : 2.2) / 50) * 50, note: 'Check there is a station on this route' });
+    opts.push({ m: 'bus', label: road < 250 ? (india ? 'AC bus' : 'Bus') : (india ? 'AC sleeper bus' : 'Bus'), hrs: road / 42, fare: Math.max(100, Math.round(road * (india ? 1.6 : 2) / 50) * 50) });
   }
   if (gc > 300 || !same) opts.push({ m: 'flight', label: 'Flight', hrs: 1.5 + gc / 700, fare: Math.round(((same ? 3200 : 6000) + gc * (same ? 2.2 : 4)) / 100) * 100 });
+  if (same && road <= 1500) {
+    // private car with driver, priced per car: per-km rate (min 250 km a day in India), driver allowance, tolls
+    const trav = S.trip.travellers || 2;
+    const suv = trav > 4, cars = suv ? Math.ceil(trav / 6) : 1;
+    const hrs = road / 45 + Math.floor(road / 300) * 0.5;
+    const days = Math.max(1, Math.ceil(hrs / 9));
+    const rate = india ? (suv ? 18 : 13) : (suv ? 40 : 30);
+    const perCar = Math.max(road, india ? 250 * days : road) * rate + (india ? days * 400 + road * 1.5 : 0);
+    opts.push({ m: 'car', per: 'car', label: 'Private car' + (suv ? ' (SUV' : ' (sedan') + ', with driver)', hrs, cars, perCar: Math.round(perCar / 100) * 100, total: Math.round(perCar * cars / 100) * 100,
+      note: (cars > 1 ? cars + ' cars · ' : '') + (suv ? 'SUV seats 6' : 'Sedan seats 4') + ' · door to door, stop anywhere on the way' });
+  }
   if (!opts.length) opts.push({ m: 'road', label: 'Taxi or bus', hrs: road / 40, fare: Math.round(road * 12 / 50) * 50 });
+  const trav = S.trip.travellers || 2;
+  opts.forEach((o) => { if (o.per !== 'car') { o.per = 'person'; o.total = o.fare * trav; } });
   return { gc, road, same, india, opts };
 }
 function legs() {
@@ -664,12 +677,22 @@ function legs() {
     const o = legOptions(a, b);
     const key = a.key + '>' + b.key;
     const want = S.trip.legModes[key];
-    const mode = o.opts.some((x) => x.m === want) ? want : (o.gc > 1200 || !o.same ? 'flight' : o.opts[0].m);
+    const mode = o.opts.some((x) => x.m === want) ? want : (o.gc > 1200 || !o.same ? 'flight' : o.road < 150 && o.opts.some((x) => x.m === 'car') ? 'car' : o.opts[0].m);
     const sel = o.opts.find((x) => x.m === mode) || o.opts[0];
     const date = i === 0 ? S.trip.start : (dates[i - 1] ? dates[i - 1].out : endDate);
-    out.push(Object.assign({ key, a, b, mode, sel, date, cheap: Math.min(...o.opts.map((x) => x.fare)), fast: Math.min(...o.opts.map((x) => x.hrs)) }, o));
+    out.push(Object.assign({ key, a, b, mode, sel, date, cheap: Math.min(...o.opts.map((x) => x.total)), fast: Math.min(...o.opts.map((x) => x.hrs)) }, o));
   }
   return out;
+}
+function trainVsCar(l) {
+  const tr = l.opts.find((o) => o.m === 'train') || l.opts.find((o) => o.m === 'bus'), car = l.opts.find((o) => o.m === 'car');
+  if (!tr || !car) return null;
+  const word = tr.m === 'train' ? 'Train' : 'Bus', ico = tr.m === 'train' ? '🚆' : '🚌';
+  const n = S.trip.travellers, d = car.total - tr.total;
+  return h('div', { class: 'banner sm', style: 'font-weight:500' },
+    h('b', {}, word + ' vs private car for ' + n + (n === 1 ? ' person: ' : ' people: ')),
+    ico + ' ₹' + fmt(tr.total) + ' (' + fmtH(tr.hrs) + ') vs 🚗 ₹' + fmt(car.total) + ' (' + fmtH(car.hrs) + '). ',
+    d > 0 ? 'The car costs ₹' + fmt(d) + ' more but is door to door and you can stop on the way.' : 'The car is ₹' + fmt(-d) + ' cheaper for your group, and door to door.');
 }
 function legLinks(l) {
   const A = l.a.name, B = l.b.name;
@@ -680,6 +703,8 @@ function legLinks(l) {
   } else if (l.mode === 'bus') {
     if (l.india) links.unshift(['redBus', 'https://www.redbus.in/bus-tickets/' + slug(A) + '-to-' + slug(B)]);
     links.push(['Buses on Google', 'https://www.google.com/search?q=' + enc('bus from ' + A + ' to ' + B)]);
+  } else if (l.mode === 'car') {
+    links.unshift(['Outstation cabs on Google', 'https://www.google.com/search?q=' + enc('outstation cab ' + A + ' to ' + B + ' fare')], ['Driving route', 'https://www.google.com/maps/dir/?api=1&origin=' + enc(A) + '&destination=' + enc(B) + '&travelmode=driving']);
   } else if (l.mode === 'flight') {
     links.unshift(['Google Flights', 'https://www.google.com/travel/flights?q=' + enc('Flights from ' + A + ' to ' + B + ' on ' + l.date)]);
     links.push(['Skyscanner', 'https://www.skyscanner.co.in/'], ['MakeMyTrip', 'https://www.makemytrip.com/flights/']);
@@ -735,7 +760,8 @@ function planVariants() {
   const base = structuredClone(S.trip);
   const L = legs();
   const cheap = {}, fast = {};
-  L.forEach((l) => { cheap[l.key] = l.opts.reduce((a, b) => (b.fare < a.fare ? b : a)).m; fast[l.key] = l.opts.reduce((a, b) => (b.hrs < a.hrs ? b : a)).m; });
+  const byCar = {};
+  L.forEach((l) => { cheap[l.key] = l.opts.reduce((a, b) => (b.total < a.total ? b : a)).m; fast[l.key] = l.opts.reduce((a, b) => (b.hrs < a.hrs ? b : a)).m; byCar[l.key] = l.opts.some((o) => o.m === 'car') ? 'car' : l.mode; });
   const seedOf = (k) => (base.seed || 1) * 7 + k * 101;
   const vs = [
     { id: 'yours', name: 'Your plan', note: 'Exactly as you set it.', trip: base, patch: {} },
@@ -744,6 +770,7 @@ function planVariants() {
   ];
   const bo = bestOrderStops(base.stops);
   if (bo && routeKm(base.stops) - bo.km > 5) vs.push({ id: 'short', name: 'Shortest route', note: 'Same places, in the order with the least travel.', trip: Object.assign(structuredClone(base), { stops: bo.stops, legModes: {}, swaps: {}, seed: seedOf(3) }), patch: {} });
+  if (L.some((l) => l.opts.some((o) => o.m === 'car'))) vs.push({ id: 'car', name: 'By private car', note: 'A car with driver between places wherever the road trip is under 1,500 km.', trip: Object.assign(structuredClone(base), { legModes: byCar, seed: seedOf(5) }), patch: {} });
   vs.push({ id: 'relaxed', name: 'Relaxed', note: 'One extra night at each place, slower days.', trip: Object.assign(structuredClone(base), { stops: base.stops.map((s) => Object.assign({}, s, { nights: Math.min(21, s.nights + 1) })), swaps: {}, seed: seedOf(4) }), patch: {} });
   vs.push({ id: 'mix', name: 'Different sights', note: 'Same route and dates, a fresh mix of sights and food.', trip: Object.assign(structuredClone(base), { swaps: {}, seed: 2 + Math.floor(((base.seed || 1) * 9301 + 49297) % 233280) * 4099 }), patch: {} });
   return vs.map((v) => withPlan(v.trip, v.patch, () => {
@@ -804,7 +831,7 @@ function stopRates(s) {
 function costs() {
   const c = { transit: 0, stay: 0, food: 0, local: 0, act: 0, visa: 0 };
   S.trip.stops.forEach((s) => { const r = stopRates(s); c.stay += r.stay * s.nights; c.food += r.food * s.nights; c.local += r.local * s.nights; c.act += r.act * s.nights; });
-  legs().forEach((l) => { c.transit += l.sel.fare * S.trip.travellers; });
+  legs().forEach((l) => { c.transit += l.sel.total; });
   c.visa = Number(S.trip.over.visaTotal) || 0;
   c.total = c.transit + c.stay + c.food + c.local + c.act + c.visa;
   return c;
@@ -850,7 +877,7 @@ function stopPlanData(s) {
 function itinerary() {
   const L = legs(), dates = stopDates(), days = [];
   const T = S.trip, extra = T.extra || {};
-  const travelItem = (lg) => ({ tag: 'Travel', time: '', title: lg.a.name + ' to ' + lg.b.name + ' by ' + lg.sel.label.toLowerCase() + ', about ' + fmtH(lg.sel.hrs), price: lg.sel.fare * T.travellers });
+  const travelItem = (lg) => ({ tag: 'Travel', time: '', title: lg.a.name + ' to ' + lg.b.name + ' by ' + lg.sel.label.toLowerCase() + ', about ' + fmtH(lg.sel.hrs), price: lg.sel.total });
   const lastStop = T.stops.length - 1;
   T.stops.forEach((s, i) => {
     const { pool, eats, trips } = stopPlanData(s);
@@ -1212,7 +1239,7 @@ function planSummary() {
       visa: s.geo && s.geo.cc !== S.settings.home.cc && visaFor(s.geo.country) ? visaFor(s.geo.country) : null,
       localTransport: ((R[s.key] && R[s.key].voyage && R[s.key].voyage.modes) || []).map((m) => m.name + ': ' + faresIn(m.text).map((f) => f.raw).join(', ')).slice(0, 6)
     })),
-    legs: L.map((l) => ({ from: l.a.name, to: l.b.name, date: l.date, mode: l.mode, hours: Math.round(l.sel.hrs * 10) / 10, farePerPersonInrEstimate: l.sel.fare })),
+    legs: L.map((l) => ({ from: l.a.name, to: l.b.name, date: l.date, mode: l.mode, hours: Math.round(l.sel.hrs * 10) / 10, groupCostInrEstimate: l.sel.total })),
     days: itinerary().slice(0, 21).map((d) => ({ date: d.date, place: shortName(d.stop), plan: d.items.map((x) => x.title) })),
     costEstimateInr: { transport: c.transit, stay: c.stay, food: c.food, localTransport: c.local, activities: c.act, visa: c.visa, total: c.total }
   };
@@ -1598,11 +1625,12 @@ function viewRoute() {
         h('div', { class: 'mu xs' }, 'About ' + fmt(l.road) + ' km by road, ' + fmt(l.gc) + ' km straight'),
         l.opts.map((o) => {
           const on = o.m === l.mode;
-          const tag = o.fare === l.cheap && o.hrs === l.fast ? 'Cheapest and fastest' : o.fare === l.cheap ? 'Cheapest' : o.hrs === l.fast ? 'Fastest' : '';
+          const tag = o.total === l.cheap && o.hrs === l.fast ? 'Cheapest and fastest' : o.total === l.cheap ? 'Cheapest' : o.hrs === l.fast ? 'Fastest' : '';
           return h('button', { type: 'button', class: 'opt', 'aria-pressed': String(on), onclick: () => set((s) => { s.trip.legModes[l.key] = o.m; s.banner = l.a.name + ' to ' + l.b.name + ' now by ' + o.label.toLowerCase() + '. Costs and days re-planned.'; }) },
-            h('span', {}, h('span', { class: 'b' }, o.label), h('br'), h('span', { class: 'mu sm' }, fmtH(o.hrs) + (o.m === 'flight' ? ' flying, plus airport time' : ''))),
-            h('span', { style: 'text-align:right' }, h('span', { class: 'b' }, '₹' + fmt(o.fare) + ' each'), h('br'), tag ? chip(tag) : ''));
+            h('span', {}, h('span', { class: 'b' }, (o.m === 'car' ? '🚗 ' : o.m === 'train' ? '🚆 ' : o.m === 'bus' ? '🚌 ' : o.m === 'flight' ? '✈️ ' : '') + o.label), h('br'), h('span', { class: 'mu sm' }, fmtH(o.hrs) + (o.m === 'flight' ? ' flying, plus airport time' : '')), o.note ? [h('br'), h('span', { class: 'mu xs' }, o.note)] : null),
+            h('span', { style: 'text-align:right' }, h('span', { class: 'b' }, '₹' + fmt(o.total)), h('br'), h('span', { class: 'mu xs' }, o.per === 'car' ? '₹' + fmt(o.perCar) + ' per car' : '₹' + fmt(o.fare) + ' each'), h('br'), tag ? chip(tag) : ''));
         }),
+        trainVsCar(l),
         h('div', { class: 'mu xs' }, 'Rough estimate from distance. Check real times and seats on the sites below.'),
         h('div', { class: 'row wrap' }, legLinks(l).map(([t, u]) => ext(u, t, 'btn2')))));
     });
@@ -1695,6 +1723,8 @@ function viewTrip() {
       intl.length ? h('div', { class: 'line row' }, h('label', { for: 'visaT', class: 'grow' }, 'Visa fees, all travellers'), h('input', { id: 'visaT', class: 'inp', style: 'width:130px', inputmode: 'numeric', value: String(S.trip.over.visaTotal || 0), onchange: (e) => set((x) => { x.trip.over.visaTotal = Number(String(e.target.value).replace(/[^0-9.]/g, '')) || 0; }) })) : null),
     h('div', { class: 'mu xs' }, 'Estimates, not quotes. Transport uses distance; stay and food use your budget style.'));
   out.push(cc);
+  const wc = wholeTripModes();
+  if (wc) out.push(wc);
 
   // best time
   const sc = bestMonths();
@@ -1729,6 +1759,24 @@ function addToDay(d) {
   return h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: id }, 'Place or activity to add'),
     h('input', { id, class: 'inp', type: 'text', placeholder: 'e.g. Padmanabhapuram Palace', autocomplete: 'off', onkeydown: (e) => { if (e.key === 'Enter') go(); } }),
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn', onclick: go }, 'Add'), h('button', { type: 'button', class: 'btn2', onclick: () => { mem.addDay = null; render(); } }, 'Cancel')));
+}
+function wholeTripModes() {
+  const L = legs();
+  const road = L.filter((l) => l.opts.some((o) => o.m === 'car') && l.opts.some((o) => o.m === 'train' || o.m === 'bus'));
+  if (!road.length) return null;
+  const pub = (l) => l.opts.find((o) => o.m === 'train') || l.opts.find((o) => o.m === 'bus');
+  const now = L.reduce((a, l) => a + l.sel.total, 0);
+  const train = L.reduce((a, l) => a + (road.includes(l) ? pub(l) : l.sel).total, 0);
+  const car = L.reduce((a, l) => a + (road.includes(l) ? l.opts.find((o) => o.m === 'car') : l.sel).total, 0);
+  const apply = (m) => set((s) => { road.forEach((l) => { s.trip.legModes[l.key] = m === 'car' ? 'car' : pub(l).m; }); s.banner = 'Travel between nearby places is now by ' + (m === 'car' ? 'private car' : 'train or bus') + '. Costs and days updated.'; });
+  const n = S.trip.travellers;
+  return h('div', { class: 'card' }, h('h2', {}, 'Train or private car?'),
+    h('div', { class: 'mu sm' }, 'For the ' + road.length + ' road-distance ' + (road.length === 1 ? 'leg' : 'legs') + ' of your trip, for ' + n + (n === 1 ? ' person' : ' people') + '. Long legs keep their current mode.'),
+    h('div', { class: 'grid2' }, statBox('🚆 Train or bus', '₹' + fmt(train)), statBox('🚗 Private car', '₹' + fmt(car))),
+    h('div', { class: 'kv sm' }, h('span', {}, 'Your current choice'), h('span', {}, '₹' + fmt(now))),
+    h('div', { class: 'sm' }, car > train ? 'The car costs ₹' + fmt(car - train) + ' more in total, but saves waiting at stations and lets you stop for views and food on the way.' : 'The car is ₹' + fmt(train - car) + ' cheaper for your group and goes door to door.'),
+    h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => apply('train') }, 'Use train or bus'), h('button', { type: 'button', class: 'btn2', onclick: () => apply('car') }, 'Use private car')),
+    h('div', { class: 'mu xs' }, 'Car estimate: about ₹13 per km for a sedan (₹18 for an SUV) with a 250 km daily minimum, driver allowance and tolls. Train: 3AC fares, offered only for 150 km or more; bus for shorter hops.'));
 }
 function setOver(key, f, val) { const n = Number(String(val).replace(/[^0-9.]/g, '')); set((s) => { s.trip.over[key] = s.trip.over[key] || {}; s.trip.over[key][f] = isNaN(n) ? null : n; }); }
 function newsButton(s) {
