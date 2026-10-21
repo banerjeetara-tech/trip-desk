@@ -118,7 +118,7 @@ const DEFAULTS = {
     food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid',
     proxy: 'https://youtubenews.banerjee-tara.workers.dev/?url=', backend: '', passcode: ''
   },
-  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {} },
+  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {} },
   wdate: '', wstop: 0, people: ['You', 'Partner'], payer: 0, expenses: [], docs: {}, plans: [],
   check: null, meterLog: []
 };
@@ -299,7 +299,8 @@ function listItems(d, max) {
     const t = txt(li);
     if (t.length < 12) return;
     const nEl = li.querySelector('.listing-name, .fn, b');
-    let name = nEl ? txt(nEl) : '';
+    const first = li.firstElementChild;
+    let name = nEl ? txt(nEl) : (first && /^(A|STRONG|SPAN)$/.test(first.tagName) && t.startsWith(txt(first)) ? txt(first) : '');
     if (!name || name.length > 80) name = t.split(/[.:—–(]/)[0].slice(0, 70).trim();
     const k = norm(name);
     if (!k || seen.has(k)) return;
@@ -395,7 +396,7 @@ async function fetchVoyage(stop) {
     if (k === 'getaround') out.modes = extractModes(d);
     else if (k === 'getin') out.getin = paragraphs(d, 4).concat(headingBlocks(d).filter((b) => /^by\s/i.test(b.title)).map((b) => b.title + ': ' + b.text.slice(0, 300))).slice(0, 6);
     else if (k === 'safe' || k === 'understand') out[k] = paragraphs(d, 3);
-    else if (k === 'cities' || k === 'other') out.see = out.see.concat(listItems(d, 10));
+    else if (k === 'cities' || k === 'other') { const li = listItems(d, 12); out.dests = (out.dests || []).concat(li); out.see = out.see.concat(li.slice(0, 10)); }
     else out[k] = (out[k] || []).concat(listItems(d, 14));
   });
   try {
@@ -721,7 +722,10 @@ function itinerary() {
   S.trip.stops.forEach((s, i) => {
     const v = (R[s.key] && R[s.key].voyage) || {};
     const skipped = new Set(skip[s.key] || []);
-    const pool = shuffled((v.see || []).concat(v.do || []).filter((x) => !skipped.has(x.name)), T.seed, s.key + 'see');
+    const base = (v.see || []).concat(v.do || []).filter((x) => !skipped.has(x.name));
+    const must = ((T.must || {})[s.key] || []).filter((n) => !skipped.has(n));
+    const mustItems = must.map((n) => base.find((x) => x.name === n) || { name: n, text: '' });
+    const pool = mustItems.concat(shuffled(base.filter((x) => !must.includes(x.name)), T.seed, s.key + 'see'));
     const eats = shuffled((v.eat || []).filter((e) => dietOk(e.text) && !skipped.has(e.name)), T.seed, s.key + 'eat');
     for (let d = 0; d < s.nights; d++) {
       const items = [];
@@ -761,6 +765,111 @@ function loadPreset(p) {
     s.tab = 'plan';
   });
   researchAll(false);
+}
+
+
+/* ---------- Explore: type a place, see what is there, tap to add ---------- */
+let suggestTimer = null;
+function exploreInput(e) {
+  mem.exploreQ = e.target.value;
+  clearTimeout(suggestTimer);
+  const q = mem.exploreQ.trim();
+  const box = document.getElementById('sugg');
+  if (q.length < 2) { mem.suggest = []; if (box) box.replaceChildren(); return; }
+  suggestTimer = setTimeout(async () => {
+    try {
+      const j = await getJSON(WV + '&action=opensearch&limit=7&namespace=0&search=' + enc(q), 8000);
+      if (mem.exploreQ.trim() !== q) return;
+      mem.suggest = (j && j[1]) || [];
+    } catch (err) { mem.suggest = []; }
+    const b = document.getElementById('sugg');
+    if (b) b.replaceChildren(...suggestButtons());
+  }, 300);
+}
+function suggestButtons() {
+  return (mem.suggest || []).map((name) => h('button', { type: 'button', class: 'pill', style: 'text-align:left', onclick: () => explore(name) }, '📍 ' + name));
+}
+async function explore(name) {
+  name = String(name || '').trim();
+  if (!name) return;
+  mem.exploreQ = name; mem.suggest = []; mem.exploreKey = keyOf(name); mem.exploreName = name;
+  const key = mem.exploreKey;
+  render();
+  if (!(R[key] && R[key].voyage)) await task(key, 'voyage', () => fetchVoyage({ name, geo: null }));
+  const v = R[key] && R[key].voyage;
+  if (v && v.dests && v.dests.length && !R[key].destImg) {
+    try {
+      const titles = v.dests.slice(0, 12).map((d) => d.name).join('|');
+      const q = await getJSON(WV + '&action=query&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=300&exintro=1&explaintext=1&exsentences=1&exlimit=12&titles=' + enc(titles), 12000);
+      const map = {};
+      ((q.query && q.query.pages) || []).forEach((pg) => { if (pg.title) map[norm(pg.title)] = { img: pg.thumbnail && pg.thumbnail.source || '', text: pg.extract || '' }; });
+      ((q.query && q.query.redirects) || []).forEach((r) => { if (map[norm(r.to)]) map[norm(r.from)] = map[norm(r.to)]; });
+      R[key].destImg = map; save();
+    } catch (e) { R[key].destImg = {}; }
+  }
+  render();
+}
+function addSight(placeName, placeKey, sightName) {
+  if (!S.trip.stops.some((x) => x.key === placeKey)) addStop(placeName);
+  set((s) => {
+    s.trip.must = s.trip.must || {};
+    const arr = s.trip.must[placeKey] || [];
+    if (!arr.includes(sightName)) s.trip.must[placeKey] = arr.concat([sightName]);
+    if (s.trip.skip && s.trip.skip[placeKey]) s.trip.skip[placeKey] = s.trip.skip[placeKey].filter((n) => n !== sightName);
+    s.banner = 'Added "' + sightName + '" to your ' + shortName({ name: placeName }) + ' days.';
+  });
+}
+function removeSight(placeKey, sightName) {
+  set((s) => { s.trip.must[placeKey] = (s.trip.must[placeKey] || []).filter((n) => n !== sightName); s.banner = 'Removed "' + sightName + '" from your must-see list.'; });
+}
+function exploreCard() {
+  const card = h('div', { class: 'card hl' }, h('h2', {}, 'Explore a place'),
+    h('div', { class: 'mu sm' }, 'Type a city, state or country. Pick it from the list to see its towns and sights, then tap Add.'));
+  const inp = h('input', { id: 'explore', class: 'inp', type: 'search', value: mem.exploreQ || '', placeholder: 'e.g. Kerala, Thailand, Kanyakumari', autocomplete: 'off', oninput: exploreInput, onkeydown: (e) => { if (e.key === 'Enter') explore(e.target.value); } });
+  card.append(h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => explore(inp.value) }, 'Explore')),
+    h('div', { id: 'sugg', class: 'row wrap', style: 'gap:6px' }, suggestButtons()));
+  const key = mem.exploreKey;
+  if (!key) return card;
+  const name = mem.exploreName;
+  const r = R[key] || {};
+  const v = r.voyage;
+  if (isBusy(key, 'voyage')) { card.append(h('div', { class: 'line' }, h('span', { class: 'spin' }), ' Finding what to see in ' + name + '…')); return card; }
+  if (!v) { card.append(h('div', { class: 'warnbox sm' }, 'Could not load ' + name + ': ' + ((r.err && r.err.voyage) || 'no guide found') + '. Try another spelling.')); return card; }
+  const inTrip = S.trip.stops.some((x) => x.key === key);
+  card.append(h('div', { class: 'line', style: 'display:flex;gap:12px;align-items:flex-start' },
+    v.image ? h('img', { class: 'thumb', src: v.image, alt: v.title, loading: 'lazy' }) : null,
+    h('div', { class: 'grow' }, h('div', { class: 'b', style: 'font-size:17px' }, v.title), v.intro ? h('div', { class: 'sm' }, v.intro.length > 260 ? v.intro.slice(0, 260) + '…' : v.intro) : null)),
+    inTrip ? chip('✓ ' + v.title + ' is in your trip') : h('button', { type: 'button', class: 'btn', onclick: () => addStop(name) }, '＋ Add ' + v.title + ' as a stop'));
+  const dests = v.dests || [];
+  if (dests.length) {
+    card.append(h('h3', { class: 'line' }, 'Places to visit in ' + v.title), h('div', { class: 'mu xs' }, 'Tap Add and the place becomes a stop. Hotels, days, travel and weather follow.'));
+    dests.slice(0, 12).forEach((d) => {
+      const info = (r.destImg || {})[norm(d.name)] || {};
+      const dk = keyOf(d.name);
+      const added = S.trip.stops.some((x) => x.key === dk);
+      card.append(h('div', { class: 'line', style: 'display:flex;gap:12px;align-items:flex-start' },
+        info.img ? h('img', { class: 'thumb', src: info.img, alt: d.name, loading: 'lazy' }) : h('div', { class: 'thumb', 'aria-hidden': 'true' }, '📍'),
+        h('div', { class: 'grow' }, h('div', { class: 'b' }, d.name), h('div', { class: 'sm mu' }, (d.text || info.text || '').slice(0, 150)),
+          h('div', { class: 'row wrap', style: 'margin-top:6px' },
+            added ? chip('✓ In your trip') : h('button', { type: 'button', class: 'btn2', onclick: () => addStop(d.name) }, '＋ Add'),
+            h('button', { type: 'button', class: 'btn2', onclick: () => explore(d.name) }, 'Explore')))));
+    });
+  }
+  const destNames = new Set(dests.map((d) => d.name));
+  const sights = (v.see || []).concat(v.do || []).filter((x) => !destNames.has(x.name));
+  if (sights.length) {
+    const must = (S.trip.must || {})[key] || [];
+    card.append(h('h3', { class: 'line' }, 'Sights and things to do'), h('div', { class: 'mu xs' }, 'Tap Add to put it in your day plan for ' + v.title + '.'));
+    sights.slice(0, 16).forEach((x) => {
+      const on = must.includes(x.name);
+      card.append(h('div', { class: 'line row', style: 'align-items:flex-start' },
+        h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.price ? h('div', { class: 'sm b', style: 'color:var(--ac)' }, x.price) : null, h('div', { class: 'sm mu' }, (x.text || '').slice(0, 140))),
+        on ? h('button', { type: 'button', class: 'btn2', 'aria-pressed': 'true', onclick: () => removeSight(key, x.name) }, '✓ Added') : h('button', { type: 'button', class: 'btn2', onclick: () => addSight(name, key, x.name) }, '＋ Add')));
+    });
+  }
+  if (!dests.length && !sights.length) card.append(h('div', { class: 'mu sm line' }, 'The guide lists no sights for this place. You can still add it as a stop.'));
+  card.append(h('div', { class: 'row' }, ext(v.url, 'Full guide', 'btn2'), h('button', { type: 'button', class: 'btn2', onclick: () => { mem.exploreKey = null; mem.exploreQ = ''; render(); } }, 'Close')));
+  return card;
 }
 
 /* ---------- stops editing ---------- */
@@ -839,12 +948,18 @@ function renderNow() {
   document.documentElement.dataset.theme = S.settings.theme === 'sunset' ? '' : S.settings.theme;
   const main = document.getElementById('main');
   const keepScroll = main.dataset.tab === S.tab ? main.scrollTop : 0;
+  const ae = document.activeElement;
+  const focus = ae && ae.id && main.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) ? { id: ae.id, value: ae.value, s: ae.selectionStart, e: ae.selectionEnd } : null;
   main.replaceChildren();
   const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings }[S.tab] || viewPlan;
   try { view().forEach((n) => n && main.append(n)); }
   catch (e) { main.append(h('div', { class: 'card' }, h('h2', {}, 'Something went wrong'), h('div', { class: 'sm' }, String(e && e.message || e)))); console.error(e); }
   main.dataset.tab = S.tab;
   main.scrollTop = keepScroll;
+  if (focus) {
+    const el = document.getElementById(focus.id);
+    if (el) { if (el.type === 'text' || el.tagName === 'TEXTAREA') { el.value = focus.value; } el.focus({ preventScroll: true }); try { if (focus.s != null) el.setSelectionRange(focus.s, focus.e); } catch (e) {} }
+  }
   const nav = document.getElementById('nav');
   nav.replaceChildren(...TABS.map(([k, l, i]) => h('button', { type: 'button', 'aria-current': S.tab === k ? 'page' : 'false', onclick: () => set((s) => { if (s.tab !== k) s.banner = ''; s.tab = k; }) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, i), l)));
 }
@@ -870,7 +985,8 @@ function srcChips(key) {
 /* ----- Plan ----- */
 function viewPlan() {
   const st = S.trip.stops;
-  const out = [h('div', {}, h('h1', {}, 'Where to next?'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Add one place or several. Everything is researched live from free sources.'))];
+  const out = [h('div', {}, h('h1', {}, 'Where to next?'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Explore a place, tap what you like, and it goes into your trip.'))];
+  out.push(exploreCard());
   out.push(bannerEl());
   const list = h('div', { class: 'card' }, h('h2', {}, 'Your route'),
     h('div', { class: 'mu sm' }, [S.settings.home.name].concat(st.map(shortName), [S.settings.home.name]).join(' → ')));
@@ -882,6 +998,7 @@ function viewPlan() {
         h('div', { class: 'grow' }, h('div', { class: 'b' }, s.name), h('div', { class: 'mu xs' }, s.geo ? [s.geo.admin1, s.geo.country].filter(Boolean).join(', ') : (isBusy(s.key, 'geo') ? 'Finding…' : (r.err && r.err.geo) || 'Not found yet'))),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => set((x) => { const a = x.trip.stops; [a[i - 1], a[i]] = [a[i], a[i - 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↑'),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Move later', disabled: i === st.length - 1, onclick: () => set((x) => { const a = x.trip.stops; [a[i + 1], a[i]] = [a[i], a[i + 1]]; x.trip.swaps = {}; x.banner = 'Moved ' + shortName(s) + '. Legs, dates and days re-planned.'; }) }, '↓'),
+        h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Explore ' + s.name, onclick: () => { explore(s.name); document.getElementById('main').scrollTop = 0; } }, '🔍'),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Remove ' + s.name, onclick: () => set((x) => { x.trip.stops.splice(i, 1); x.trip.swaps = {}; x.banner = 'Removed ' + shortName(s) + '.'; }) }, '×')),
       stepper('nights', s.nights + (s.nights === 1 ? ' night' : ' nights'),
         () => set((x) => { x.trip.stops[i].nights = clamp(s.nights - 1, 1, 21); x.trip.swaps = {}; }),
