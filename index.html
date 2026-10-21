@@ -130,7 +130,7 @@ const DEFAULTS = {
     food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid',
     proxy: 'https://youtubenews.banerjee-tara.workers.dev/?url=', backend: '', passcode: ''
   },
-  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {} },
+  trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {}, startAt: null, endMode: 'home', endAt: null },
   wdate: '', wstop: 0, people: ['You', 'Partner'], payer: 0, expenses: [], docs: {}, plans: [],
   check: null, meterLog: []
 };
@@ -602,6 +602,15 @@ function isIndianPassport() { return /^india/i.test(S.settings.passport.trim());
 
 /* ---------- route maths ---------- */
 function homePt() { const hm = S.settings.home; return { key: 'home', name: hm.name, lat: hm.lat, lng: hm.lng, cc: hm.cc }; }
+function startPt() { const a = S.trip.startAt; return a && a.lat != null ? { key: 'start', name: a.name, lat: a.lat, lng: a.lng, cc: a.cc } : homePt(); }
+function endPts() {
+  const m = S.trip.endMode || 'home', e = S.trip.endAt;
+  if (m === 'oneway') return [];
+  if (m === 'city' && e && e.lat != null) return [{ key: 'end', name: e.name, lat: e.lat, lng: e.lng, cc: e.cc }, homePt()];
+  return [homePt()];
+}
+function routePts(stops) { return [startPt()].concat(stops.map(stopPt), endPts()); }
+function routeNames(stops) { return [startPt().name].concat(stops.map(shortName), endPts().map((p) => p.name)).join(' → '); }
 function stopPt(s) { return s.geo ? { key: s.key, name: shortName(s), lat: s.geo.lat, lng: s.geo.lng, cc: s.geo.cc } : null; }
 function shortName(s) { return s.name.split(',')[0].trim(); }
 function stopDates() {
@@ -624,8 +633,9 @@ function legOptions(a, b) {
   return { gc, road, same, india, opts };
 }
 function legs() {
-  const pts = [homePt()].concat(S.trip.stops.map(stopPt), [homePt()]);
+  const pts = routePts(S.trip.stops);
   if (pts.some((p) => !p)) return [];
+  const endDate = addDays(S.trip.start, totalNights());
   const dates = stopDates();
   const out = [];
   for (let i = 0; i < pts.length - 1; i++) {
@@ -635,7 +645,7 @@ function legs() {
     const want = S.trip.legModes[key];
     const mode = o.opts.some((x) => x.m === want) ? want : (o.gc > 1200 || !o.same ? 'flight' : o.opts[0].m);
     const sel = o.opts.find((x) => x.m === mode) || o.opts[0];
-    const date = i === 0 ? S.trip.start : dates[i - 1].out;
+    const date = i === 0 ? S.trip.start : (dates[i - 1] ? dates[i - 1].out : endDate);
     out.push(Object.assign({ key, a, b, mode, sel, date, cheap: Math.min(...o.opts.map((x) => x.fare)), fast: Math.min(...o.opts.map((x) => x.hrs)) }, o));
   }
   return out;
@@ -656,8 +666,7 @@ function legLinks(l) {
   return links;
 }
 function routeKm(stops) {
-  const home = homePt();
-  const p = [home].concat(stops.map(stopPt), [home]);
+  const p = routePts(stops);
   if (p.some((x) => !x)) return null;
   let tkm = 0; for (let i = 0; i < p.length - 1; i++) tkm += hav(p[i], p[i + 1]);
   return tkm * 1.3;
@@ -671,7 +680,7 @@ function bestOrderStops(stops) {
   };
   if (stops.length <= 7) perm(stops, []);
   else { // nearest neighbour for big trips
-    const left = stops.slice(); let cur = homePt(); best = [];
+    const left = stops.slice(); let cur = startPt(); best = [];
     while (left.length) { left.sort((a, b) => hav(cur, stopPt(a)) - hav(cur, stopPt(b))); const nx = left.shift(); best.push(nx); cur = stopPt(nx); }
     bestT = routeKm(best);
   }
@@ -689,9 +698,9 @@ async function bestOrder() {
   const now = routeKm(S.trip.stops);
   const r = bestOrderStops(S.trip.stops);
   set((s) => {
-    if (!r || r.km >= now - 5) { s.banner = 'Your order is already the shortest loop: ' + [s.settings.home.name].concat(s.trip.stops.map(shortName), [s.settings.home.name]).join(' → ') + ' (about ' + fmt(now) + ' km).'; return; }
+    if (!r || r.km >= now - 5) { s.banner = 'Your order is already the shortest: ' + routeNames(s.trip.stops) + ' (about ' + fmt(now) + ' km).'; return; }
     s.trip.stops = r.stops; s.trip.swaps = {}; s.trip.legModes = {};
-    s.banner = 'Best order: ' + [s.settings.home.name].concat(r.stops.map(shortName), [s.settings.home.name]).join(' → ') + '. Saves about ' + fmt(now - r.km) + ' km. Every tab is updated.';
+    s.banner = 'Best order: ' + routeNames(r.stops) + '. Saves about ' + fmt(now - r.km) + ' km. Every tab is updated.';
   });
 }
 
@@ -831,7 +840,7 @@ function itinerary() {
       if (eats.length) { const e = eats[d % eats.length]; items.push({ tag: 'Eat', title: e.name, text: e.text, price: null, place: shortName(s), stopKey: s.key }); }
       const dayKey = s.key + '|' + d;
       (extra[dayKey] || []).forEach((x) => items.push({ tag: 'Mine', title: x.title, text: '', place: shortName(s), dayKey, mineId: x.id }));
-      if (i === S.trip.stops.length - 1 && d === s.nights - 1 && L[i + 1]) items.push({ tag: 'Travel', title: L[i + 1].a.name + ' to ' + L[i + 1].b.name + ' by ' + L[i + 1].sel.label.toLowerCase() + ', about ' + fmtH(L[i + 1].sel.hrs), price: L[i + 1].sel.fare * S.trip.travellers });
+      if (i === S.trip.stops.length - 1 && d === s.nights - 1) L.slice(i + 1).forEach((lg) => items.push({ tag: 'Travel', title: lg.a.name + ' to ' + lg.b.name + ' by ' + lg.sel.label.toLowerCase() + ', about ' + fmtH(lg.sel.hrs), price: lg.sel.fare * S.trip.travellers }));
       days.push({ date: addDays(dates[i].from, d), stop: s, dayKey, title: d === 0 ? 'Reach ' + shortName(s) : shortName(s) + ', day ' + (d + 1), items });
     }
   });
@@ -940,6 +949,120 @@ function addSight(placeName, placeKey, sightName) {
 function removeSight(placeKey, sightName) {
   set((s) => { s.trip.must[placeKey] = (s.trip.must[placeKey] || []).filter((n) => n !== sightName); s.banner = 'Removed "' + sightName + '" from your must-see list.'; });
 }
+/* ---------- Plan a trip for me: region + nights + dates -> suggested tours ---------- */
+function wiz() { return mem.wiz || (mem.wiz = { q: '', nights: 5, start: S.trip.start, best: false }); }
+async function ensureGeo(name) {
+  const r = rs(keyOf(name));
+  if (!r.geo) { const res = await geocode(name); if (res.length) { r.geo = res[0]; r.alts = res.slice(0, 6); } }
+  return r.geo;
+}
+async function ensureClimate(name) {
+  const r = rs(keyOf(name));
+  if (!r.climate && r.geo) { try { r.climate = await fetchClimate(r.geo); } catch (e) {} }
+  return r.climate;
+}
+function spreadNights(stops, n) {
+  const base = Math.floor(n / stops.length), rem = n % stops.length;
+  stops.forEach((s, i) => { s.nights = Math.max(1, base + (i < rem ? 1 : 0)); });
+  return stops;
+}
+async function buildTours() {
+  const w = wiz();
+  const q = (w.q || '').trim();
+  if (!q) { w.err = 'Type where you want to go, for example Kerala.'; render(); return; }
+  w.loading = true; w.tours = null; w.err = ''; w.step = 'Reading the travel guide for ' + q + '…'; render();
+  try {
+    const key = keyOf(q), r = rs(key);
+    if (!r.voyage) r.voyage = await fetchVoyage({ name: q, geo: null });
+    const v = r.voyage;
+    let cands = (v.dests || []).map((d, i) => ({ name: d.name, rank: i, text: d.text }));
+    if (!cands.length) cands = [{ name: v.title, rank: 0, text: v.intro }];
+    cands = cands.filter((c, i, a) => a.findIndex((x) => norm(x.name) === norm(c.name)) === i).slice(0, 9);
+    w.step = 'Finding ' + cands.length + ' places in ' + v.title + '…'; render();
+    await Promise.all(cands.map(async (c) => { try { c.geo = await ensureGeo(c.name); } catch (e) {} }));
+    cands = cands.filter((c) => c.geo);
+    if (!cands.length) throw new Error('Could not locate the places in ' + v.title + '.');
+    // keep places in the same country as most of them (guides sometimes link to neighbours)
+    const ccCount = {}; cands.forEach((c) => { ccCount[c.geo.cc] = (ccCount[c.geo.cc] || 0) + 1; });
+    const mainCc = Object.keys(ccCount).sort((a, b) => ccCount[b] - ccCount[a])[0];
+    cands = cands.filter((c) => !c.geo.cc || c.geo.cc === mainCc);
+    w.step = 'Checking the weather in each place…'; render();
+    await Promise.all(cands.map((c) => ensureClimate(c.name)));
+    let start = w.start || S.trip.start;
+    if (w.best) {
+      const sc = Array.from({ length: 12 }, (_, m) => { const xs = cands.map((c) => { const cl = R[keyOf(c.name)].climate; return cl && cl.months[m] ? wxScore(cl.months[m].tmax, cl.months[m].rain) : null; }).filter((x) => x != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; });
+      const now = new Date(); let bi = -1, bs = -1;
+      for (let k = 1; k <= 12; k++) { const m = (now.getMonth() + k) % 12; if (sc[m] != null && sc[m] > bs) { bs = sc[m]; bi = m; } }
+      if (bi >= 0) { const yr = now.getFullYear() + (bi <= now.getMonth() ? 1 : 0); start = yr + '-' + String(bi + 1).padStart(2, '0') + '-10'; }
+    }
+    const m = parseIso(start).getMonth();
+    cands.forEach((c) => { const cl = R[keyOf(c.name)].climate; c.wx = cl && cl.months[m]; c.score = c.wx ? wxScore(c.wx.tmax, c.wx.rain) : 50; });
+    const n = w.nights;
+    const k = clamp(Math.round(n / 2.2), 1, Math.min(5, cands.length));
+    const good = cands.filter((c) => c.score >= 40);
+    const pool = good.length >= k ? good : cands;
+    const byRank = pool.slice().sort((a, b) => a.rank - b.rank);
+    const byWx = pool.slice().sort((a, b) => b.score - a.score || a.rank - b.rank);
+    const sig = (l) => l.map((c) => c.name).sort().join('|');
+    const tours = [], seen = new Set();
+    const mk = (name, note, list) => {
+      if (!list.length || seen.has(sig(list))) return;
+      seen.add(sig(list));
+      let stops = list.map((c) => ({ name: c.name, key: keyOf(c.name), nights: 1, geo: c.geo }));
+      const bo = bestOrderStops(stops); if (bo) stops = bo.stops;
+      spreadNights(stops, n);
+      const trip = Object.assign(structuredClone(S.trip), { stops, start, name: name + ' · ' + v.title, legModes: {}, swaps: {}, seed: 2 + Math.floor(Math.random() * 1e9), must: {}, extra: {}, skip: {} });
+      const est = withPlan(trip, {}, () => { const c = costs(), lg = legs(); return { total: c.total, travelH: lg.reduce((a, l) => a + l.sel.hrs, 0), modes: lg.map((l) => l.sel.label) }; });
+      tours.push({ name, note, trip, est, wx: list.reduce((o, c) => { o[c.name] = c.wx; return o; }, {}) });
+    };
+    mk('Top highlights', 'The best-known places in ' + v.title + ', in the easiest order.', byRank.slice(0, k));
+    mk('Best weather', 'The places with the most pleasant weather on your dates.', byWx.slice(0, k));
+    if (k > 1) mk('Relaxed', 'Fewer places and more time in each, less packing and travel.', byRank.slice(0, k - 1));
+    if (pool.length > k) mk('Off the beaten path', 'Mixes one big name with quieter places.', byRank.slice(0, 1).concat(byRank.slice(k, k + Math.max(1, k - 1))));
+    w.tours = tours; w.startUsed = start; w.region = v.title;
+  } catch (e) { w.err = e.message || String(e); }
+  finally { w.loading = false; save(); render(); }
+}
+function useTour(tour) {
+  set((s) => { s.trip = structuredClone(tour.trip); s.banner = 'Using "' + tour.name + '". Building your plan now…'; });
+  mem.wiz.tours = null;
+  planNow(false);
+  const m = document.getElementById('main'); if (m) m.scrollTop = 0;
+}
+function wizardCard() {
+  const w = wiz();
+  const card = h('div', { class: 'card hl' }, h('h2', {}, '✨ Plan a trip for me'),
+    h('div', { class: 'mu sm' }, 'Say where and for how long. I check the weather in each place and suggest the best tours from ' + S.settings.home.name + ' and back.'),
+    h('label', { for: 'wiz' }, 'Where do you want to go?'),
+    h('input', { id: 'wiz', class: 'inp', type: 'search', value: w.q, placeholder: 'e.g. Kerala, Rajasthan, Thailand', autocomplete: 'off',
+      oninput: (e) => { w.q = e.target.value; suggestFor('wiz', (n) => { w.q = n; render(); })(e); }, onkeydown: (e) => { if (e.key === 'Enter') buildTours(); } }),
+    suggestBox('wiz'),
+    h('label', {}, 'How long?'),
+    stepper('nights', w.nights + ' nights · ' + (w.nights + 1) + ' days', () => { w.nights = clamp(w.nights - 1, 1, 30); render(); }, () => { w.nights = clamp(w.nights + 1, 1, 30); render(); }),
+    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Pick the best time for me'), h('div', { class: 'mu sm' }, 'Uses the climate of each place.')), sw(w.best, 'Pick the best time for me', () => { w.best = !w.best; render(); })),
+    w.best ? null : h('label', { for: 'wizstart' }, 'Start date'),
+    w.best ? null : h('input', { id: 'wizstart', class: 'inp', type: 'date', value: w.start || S.trip.start, onchange: (e) => { if (e.target.value) { w.start = e.target.value; } } }),
+    h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: w.loading ? true : null, onclick: buildTours }, w.loading ? 'Working…' : 'Suggest tours'));
+  if (w.loading) card.append(h('div', { class: 'line' }, h('span', { class: 'spin' }), ' ' + (w.step || 'Working…')));
+  if (w.err) card.append(h('div', { class: 'warnbox sm' }, w.err));
+  if (w.tours && w.tours.length) {
+    card.append(h('div', { class: 'line b' }, w.tours.length + ' tours for ' + w.region + ' · ' + w.nights + ' nights from ' + nice(w.startUsed, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })));
+    w.tours.forEach((tr) => {
+      card.append(h('div', { style: 'border:1px solid var(--ln);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--sf2)' },
+        h('div', { class: 'row between' }, h('div', { class: 'b', style: 'font-size:16px' }, tr.name), chip('₹' + fmt(tr.est.total))),
+        h('div', { class: 'mu sm' }, tr.note),
+        h('div', { class: 'sm b' }, withPlan(tr.trip, {}, () => routeNames(tr.trip.stops))),
+        tr.trip.stops.map((s) => { const x = tr.wx[s.name]; const vd = verdict(x ? wxScore(x.tmax, x.rain) : null);
+          return h('div', { class: 'row between sm' }, h('span', {}, s.name + ' · ' + s.nights + (s.nights === 1 ? ' night' : ' nights')), h('span', { class: 'row', style: 'gap:6px' }, x ? h('span', { class: 'mu xs' }, x.tmax + '° · rain ' + x.rain + '% of days') : null, chip(vd[0], vd[1]))); }),
+        h('div', { class: 'mu xs' }, 'About ' + fmtH(tr.est.travelH) + ' of travel · ' + [...new Set(tr.est.modes)].join(', ')),
+        h('button', { type: 'button', class: 'btn', onclick: () => useTour(tr) }, 'Use this tour')));
+    });
+    card.append(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: buildTours }, '🔀 Suggest again'), h('button', { type: 'button', class: 'btn2', onclick: () => { w.tours = null; render(); } }, 'Close')),
+      h('div', { class: 'mu xs' }, 'Weather is based on last year for the same month. Costs are estimates from your budget style.'));
+  }
+  return card;
+}
+
 function exploreCard() {
   const card = h('div', { class: 'card hl' }, h('h2', {}, 'Explore a place'),
     h('div', { class: 'mu sm' }, 'Type a city, state or country. Pick it from the list to see its towns and sights, then tap Add.'));
@@ -1011,7 +1134,7 @@ function planSummary() {
   const L = legs(), dates = stopDates(), c = costs();
   return {
     passport: S.settings.passport, home: S.settings.home.name, travellers: S.trip.travellers, budgetStyle: S.settings.budget, food: S.settings.food,
-    start: S.trip.start, end: addDays(S.trip.start, totalNights()),
+    start: S.trip.start, end: addDays(S.trip.start, totalNights()), route: routeNames(S.trip.stops), finish: S.trip.endMode || 'home',
     stops: S.trip.stops.map((s, i) => ({
       name: s.name, matched: s.geo ? [s.geo.name, s.geo.admin1, s.geo.country].filter(Boolean).join(', ') : null, nights: s.nights, from: dates[i].from, to: dates[i].out,
       visa: s.geo && s.geo.cc !== S.settings.home.cc && visaFor(s.geo.country) ? visaFor(s.geo.country) : null,
@@ -1108,10 +1231,11 @@ function srcChips(key) {
 function viewPlan() {
   const st = S.trip.stops;
   const out = [h('div', {}, h('h1', {}, 'Where to next?'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Explore a place, tap what you like, and it goes into your trip.'))];
+  out.push(wizardCard());
   out.push(exploreCard());
   out.push(bannerEl());
   const list = h('div', { class: 'card' }, h('h2', {}, 'Your route'),
-    h('div', { class: 'mu sm' }, [S.settings.home.name].concat(st.map(shortName), [S.settings.home.name]).join(' → ')));
+    h('div', { class: 'mu sm' }, routeNames(st)));
   st.forEach((s, i) => {
     const r = R[s.key] || {};
     const alts = (r.alts || []).filter((a) => a);
@@ -1142,6 +1266,7 @@ function viewPlan() {
   const summary = planSummaryCard();
   if (summary) out.splice(2, 0, summary);
   out.push(list);
+  if (st.length) out.push(startFinishCard());
 
   out.push(h('div', { class: 'card' }, h('h2', {}, 'Dates and travellers'),
     h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Free style'), h('div', { class: 'mu sm' }, 'Let the app pick the best month from the climate of your places.')),
@@ -1168,6 +1293,34 @@ function insertBetween(at, a, b) {
     h('input', { id: 'ins' + at, class: 'inp', type: 'text', placeholder: 'e.g. Madurai', autocomplete: 'off', oninput: suggestFor('ins' + at, (n) => { mem.insertAt = null; addStop(n, at); }), onkeydown: (e) => { if (e.key === 'Enter') go(); } }),
     suggestBox('ins' + at),
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn', onclick: go }, 'Add here'), h('button', { type: 'button', class: 'btn2', onclick: () => { mem.insertAt = null; render(); } }, 'Cancel')));
+}
+function startFinishCard() {
+  const T = S.trip, home = S.settings.home.name, m = T.endMode || 'home';
+  const pickPlace = async (name, field) => {
+    toast('Finding ' + name + '…');
+    try {
+      const r = await geocode(name);
+      if (!r.length) throw new Error('not found');
+      const g = r[0];
+      if (SUG.startat) SUG.startat.items = []; if (SUG.endat) SUG.endat.items = [];
+      set((s) => { s.trip[field] = { name: g.name, lat: g.lat, lng: g.lng, cc: g.cc, country: g.country }; if (field === 'endAt') s.trip.endMode = 'city'; s.trip.legModes = {}; s.banner = (field === 'endAt' ? 'Trip now finishes in ' : 'Trip now starts from ') + g.name + '. Route, legs, costs and days updated.'; });
+    } catch (e) { set((s) => { s.banner = 'Could not find ' + name + '. Try another spelling.'; }); }
+  };
+  const startInp = h('input', { id: 'startat', class: 'inp', type: 'search', placeholder: 'Another city, e.g. Chennai', autocomplete: 'off', oninput: suggestFor('startat', (n) => pickPlace(n, 'startAt')), onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) pickPlace(e.target.value.trim(), 'startAt'); } });
+  const endInp = h('input', { id: 'endat', class: 'inp', type: 'search', placeholder: 'Final city, e.g. Chennai', autocomplete: 'off', oninput: suggestFor('endat', (n) => pickPlace(n, 'endAt')), onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) pickPlace(e.target.value.trim(), 'endAt'); } });
+  return h('div', { class: 'card' }, h('h2', {}, 'Start and finish'),
+    h('div', { class: 'mu sm' }, 'Where the trip begins, and where it ends after your last place.'),
+    h('div', { class: 'kv' }, h('span', {}, 'Start from'), h('span', {}, T.startAt ? T.startAt.name : home + ' (home)')),
+    h('details', { open: mem.startOpen ? true : null, ontoggle: (e) => { mem.startOpen = e.target.open; } }, h('summary', { class: 'sm' }, T.startAt ? 'Change or reset start' : 'Start from another city'),
+      h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:8px' }, startInp, suggestBox('startat'),
+        T.startAt ? h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.trip.startAt = null; s.trip.legModes = {}; s.banner = 'Trip starts from ' + home + ' again.'; }) }, 'Start from ' + home) : null)),
+    h('label', {}, 'Finish'),
+    segs([['home', 'Back to ' + home], ['city', 'Another city'], ['oneway', 'One-way']], m, (v) => set((s) => { s.trip.endMode = v; s.trip.legModes = {}; s.banner = v === 'oneway' ? 'One-way trip: it ends at your last place, no return travel.' : v === 'home' ? 'Trip ends back in ' + home + '.' : (s.trip.endAt ? 'Trip finishes in ' + s.trip.endAt.name + ', then home.' : 'Type the city where you want to finish.'); })),
+    m === 'city' ? h('div', { style: 'display:flex;flex-direction:column;gap:8px' },
+      T.endAt ? h('div', { class: 'kv' }, h('span', {}, 'Final city'), h('span', {}, T.endAt.name + ', then home')) : null,
+      h('label', { for: 'endat' }, T.endAt ? 'Change final city' : 'Final city'), endInp, suggestBox('endat')) : null,
+    m === 'oneway' ? h('div', { class: 'mu sm' }, 'The trip ends at ' + shortName(S.trip.stops[S.trip.stops.length - 1]) + '. No return travel is added.') : null,
+    h('div', { class: 'sm b' }, 'Full route: ' + routeNames(S.trip.stops)));
 }
 async function planNow(force) {
   if (S.trip.stops.length && S.trip.stops.every((s) => R[s.key] && R[s.key].voyage)) { S.trip.seed = 2 + Math.floor(Math.random() * 1e9); S.trip.swaps = {}; }
@@ -1700,10 +1853,11 @@ function renderSheet() {
     onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) { addStop(e.target.value); if (SUG.qadd) { SUG.qadd.q = ''; SUG.qadd.items = []; } render(); } } });
   const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Quick actions', onclick: (e) => e.stopPropagation() },
     h('div', { class: 'row between' }, h('h2', {}, 'Quick actions'), h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Close', onclick: closeSheet }, '×')),
-    h('div', { class: 'mu sm' }, st.length ? [S.settings.home.name].concat(st.map(shortName), [S.settings.home.name]).join(' → ') : 'No places yet.'),
+    h('div', { class: 'mu sm' }, st.length ? routeNames(st) : 'No places yet.'),
     h('label', { for: 'qadd' }, 'Search and add a place'), qadd, suggestBox('qadd'),
     h('div', { class: 'grid2' },
-      h('button', { type: 'button', class: 'btn', onclick: run(() => planNow(false)) }, '🔎 Research my trip'),
+      h('button', { type: 'button', class: 'btn', onclick: run(() => { set((s) => { s.tab = 'plan'; }); setTimeout(() => { const m = document.getElementById('main'); m.scrollTop = 0; const el = document.getElementById('wiz'); if (el) el.focus(); }, 120); }) }, '✨ Plan a trip for me'),
+      h('button', { type: 'button', class: 'btn2', onclick: run(() => planNow(false)) }, '🔎 Research my trip'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length < 2 ? true : null, onclick: run(bestOrder) }, '🧭 Best order'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(differentPlan) }, '🔀 Different plan'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => set((s) => { if (s.tab !== 'compare') s.back = s.tab; s.tab = 'compare'; })) }, '⚖️ Compare plans'),
