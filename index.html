@@ -690,9 +690,10 @@ function legOptions(a, b) {
     const hrs = road / 45 + Math.floor(road / 300) * 0.5;
     const days = Math.max(1, Math.ceil(hrs / 9));
     const rate = india ? (suv ? 18 : 13) : (suv ? 40 : 30);
-    const perCar = Math.max(road, india ? 250 * days : road) * rate + (india ? days * 400 + road * 1.5 : 0);
+    const perCar = road < 100 ? Math.max(india ? 800 : 2000, road * (india ? (suv ? 30 : 22) : 60)) : Math.max(road, india ? 250 * days : road) * rate + (india ? days * 400 + road * 1.5 : 0);
     opts.push({ m: 'car', per: 'car', label: 'Private car' + (suv ? ' (SUV' : ' (sedan') + ', with driver)', hrs, cars, perCar: Math.round(perCar / 100) * 100, total: Math.round(perCar * cars / 100) * 100,
-      note: (cars > 1 ? cars + ' cars · ' : '') + (suv ? 'SUV seats 6' : 'Sedan seats 4') + ' · door to door, stop anywhere on the way' });
+      note: (cars > 1 ? cars + ' cars · ' : '') + (suv ? 'SUV seats 6' : 'Sedan seats 4') + (road < 100 ? ' · local taxi fare' : ' · door to door, stop anywhere on the way') });
+    if (road < 100) opts.forEach((o) => { if (o.m === 'car') o.label = suv ? 'Taxi (SUV)' : 'Taxi'; });
   }
   if (!opts.length) opts.push({ m: 'road', label: 'Taxi or bus', hrs: road / 40, fare: Math.round(road * 12 / 50) * 50 });
   const trav = S.trip.travellers || 2;
@@ -992,7 +993,7 @@ const PRESETS = [
 function loadPreset(p) {
   set((s) => {
     s.trip.stops = p.stops.map(([n, k]) => ({ name: n, key: keyOf(n), nights: k, geo: null }));
-    s.trip.legModes = {}; s.trip.swaps = {}; s.trip.name = p.name;
+    s.trip.legModes = {}; s.trip.swaps = {}; s.trip.name = p.name; s.trip.target = s.trip.stops.reduce((x, y) => x + y.nights, 0); s.trip.lock = true; s.trip.ask = { q: p.stops.map((x) => x[0]).join(' then '), nights: s.trip.target, best: false, inc: [] };
     s.banner = 'Loaded "' + p.name + '". Researching now. Change anything and the plan follows.';
     s.tab = 'plan';
   });
@@ -1083,7 +1084,8 @@ function removeSight(placeKey, sightName) {
   set((s) => { s.trip.must[placeKey] = (s.trip.must[placeKey] || []).filter((n) => n !== sightName); s.banner = 'Removed "' + sightName + '" from your must-see list.'; });
 }
 /* ---------- Plan a trip for me: region + nights + dates -> suggested tours ---------- */
-function wiz() { return mem.wiz || (mem.wiz = { q: '', nights: 6, start: S.trip.start, best: false, inc: [] }); }
+function wiz() { if (!S.trip.ask) S.trip.ask = { q: '', nights: 6, best: false, inc: [] }; return S.trip.ask; }
+function wst() { return mem.ws || (mem.ws = {}); }
 async function ensureGeo(name) {
   const r = rs(keyOf(name));
   if (!r.geo) { const res = await geocode(name); if (res.length) { r.geo = res[0]; r.alts = res.slice(0, 6); } }
@@ -1100,13 +1102,14 @@ function spreadNights(stops, n) {
   return stops;
 }
 async function buildTours() {
-  const w = wiz();
+  const w = wiz(), ws = wst();
+  if (SUG.wiz) { SUG.wiz.items = []; } if (SUG.wizinc) { SUG.wizinc.items = []; }
   // "Varanasi then Ayodhya", "Varanasi, Ayodhya", "Varanasi → Ayodhya" = several places in that order
   const parts = String(w.q || '').split(/\s*(?:,|;|→|->|>|\bthen\b|\band\b|\bvia\b|\bto\b)\s*/i).map((x) => x.trim()).filter(Boolean);
   const q = parts.length > 1 ? '' : (parts[0] || '');
   const inc = (parts.length > 1 ? parts : []).concat((w.inc || []).filter((x) => !parts.some((p) => norm(p) === norm(x))));
-  if (!q && !inc.length) { w.err = 'Type where you want to go, for example Kerala.'; render(); return; }
-  w.loading = true; w.tours = null; w.err = ''; w.step = 'Reading the travel guide for ' + (q || inc.join(', ')) + '…'; render();
+  if (!q && !inc.length) { ws.err = 'Type where you want to go, for example Kerala or "Varanasi then Ayodhya".'; render(); return; }
+  ws.loading = true; ws.err = ''; ws.step = 'Reading the travel guide for ' + (q || inc.join(', ')) + '…'; render();
   try {
     let v = { title: inc.join(' and '), dests: [], gonext: [], intro: '' };
     if (q) {
@@ -1128,7 +1131,7 @@ async function buildTours() {
     if (!cands.length) cands = (v.gonext || []).map((d, i) => ({ name: d.name, rank: i, text: d.text, near: true }));
     cands = cands.filter((c) => !inc.some((n) => norm(n) === norm(c.name)));
     cands = cands.filter((c, i, a) => a.findIndex((x) => norm(x.name) === norm(c.name)) === i).slice(0, 9);
-    w.step = 'Finding ' + cands.length + ' places in ' + v.title + '…'; render();
+    ws.step = 'Finding ' + cands.length + ' places in ' + v.title + '…'; render();
     await Promise.all(cands.map(async (c) => { try { c.geo = await ensureGeo(c.name); } catch (e) {} }));
     cands = cands.filter((c) => c.geo);
     if (!cands.length && !must.length) throw new Error('Could not find ' + (q || inc.join(', ')) + ' on the map. Try another spelling, for example "Varanasi".');
@@ -1136,9 +1139,9 @@ async function buildTours() {
     const ccCount = {}; cands.forEach((c) => { ccCount[c.geo.cc] = (ccCount[c.geo.cc] || 0) + 1; });
     const mainCc = Object.keys(ccCount).sort((a, b) => ccCount[b] - ccCount[a])[0] || (must[0] && must[0].geo.cc);
     cands = cands.filter((c) => !c.geo.cc || c.geo.cc === mainCc);
-    w.step = 'Checking the weather in each place…'; render();
+    ws.step = 'Checking the weather in each place…'; render();
     await Promise.all(cands.map((c) => ensureClimate(c.name)));
-    let start = w.start || S.trip.start;
+    let start = S.trip.start;
     if (w.best) {
       const sc = Array.from({ length: 12 }, (_, m) => { const xs = cands.map((c) => { const cl = R[keyOf(c.name)].climate; return cl && cl.months[m] ? wxScore(cl.months[m].tmax, cl.months[m].rain) : null; }).filter((x) => x != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; });
       const now = new Date(); let bi = -1, bs = -1;
@@ -1174,7 +1177,7 @@ async function buildTours() {
         stops = base;
       }
       spreadNights(stops, n);
-      const trip = Object.assign(structuredClone(S.trip), { stops, start, name: name + ' · ' + v.title, legModes: {}, swaps: {}, seed: 2 + Math.floor(Math.random() * 1e9), must: {}, extra: {}, skip: {} });
+      const trip = Object.assign(structuredClone(S.trip), { alts: null, ask: null, stops, start, name: name + ' · ' + v.title, legModes: {}, swaps: {}, seed: 2 + Math.floor(Math.random() * 1e9), must: {}, extra: {}, skip: {} });
       const est = withPlan(trip, {}, () => { const c = costs(), lg = legs(); return { total: c.total, travelH: lg.reduce((a, l) => a + l.sel.hrs, 0), modes: lg.map((l) => l.sel.label) }; });
       tours.push({ name, note, trip, est, wx: list.reduce((o, c) => { o[c.name] = c.wx; return o; }, {}) });
     };
@@ -1186,56 +1189,76 @@ async function buildTours() {
     if (!cityTrip && (k > 1 || (k === 1 && must.length))) mk('Relaxed', 'Fewer places and more time in each, less packing and travel.', byRank.slice(0, Math.max(0, k - 1)));
     if (cityTrip && pool.length > 1) mk('Two nearby places', 'Your places plus two nearby places, for a longer trip.', byRank.slice(0, 2));
     if (!cityTrip && k >= 1 && pool.length > k) mk('Off the beaten path', 'Mixes one big name with quieter places.', byRank.slice(0, 1).concat(byRank.slice(k, k + Math.max(1, k - 1))));
-    w.tours = tours; w.startUsed = start; w.region = [q ? v.title : '', ...must.map((c) => c.name)].filter(Boolean).join(' + ');
-    if (!tours.length) throw new Error('No tours could be built. Try fewer places or more days.');
-  } catch (e) { w.err = 'Could not suggest tours: ' + (e.message || String(e)); console.error(e); }
-  finally { w.loading = false; save(); render(); }
+    if (!tours.length) throw new Error('No plan could be built. Try fewer places or more days.');
+    ws.loading = false;
+    applyTour(tours[0], tours);
+  } catch (e) { ws.err = 'Could not make a plan: ' + (e.message || String(e)); console.error(e); }
+  finally { ws.loading = false; save(); render(); }
 }
-function useTour(tour) {
-  set((s) => { s.check = null; s.wdate = ''; s.trip = structuredClone(tour.trip); s.trip.target = s.trip.stops.reduce((a, x) => a + x.nights, 0); s.trip.lock = true; s.banner = 'Using "' + tour.name + '" for ' + (s.trip.target + 1) + ' days. Adding places will keep this length.'; });
-  mem.wiz.tours = null;
+function applyTour(tour, all) {
+  const alts = (all || S.trip.alts || []).map((x) => ({ name: x.name, note: x.note, est: x.est, wx: x.wx, trip: Object.assign(structuredClone(x.trip), { alts: null, ask: null }) }));
+  set((s) => {
+    const ask = s.trip.ask, id = s.trip.id || Date.now();
+    s.check = null; s.wdate = '';
+    s.trip = Object.assign(structuredClone(tour.trip), { alts, ask, id, altName: tour.name });
+    s.trip.target = s.trip.stops.reduce((a, x) => a + x.nights, 0); s.trip.lock = true;
+    s.banner = 'Your plan: ' + routeNames(s.trip.stops) + ' · ' + (s.trip.target + 1) + ' days. All tabs are ready. Other options are below.';
+  });
   planNow(false);
   const m = document.getElementById('main'); if (m) m.scrollTop = 0;
 }
-function wizardCard() {
-  const w = wiz();
-  const card = h('div', { class: 'card hl' }, h('h2', {}, '✨ Plan a trip for me'),
-    h('div', { class: 'mu sm' }, 'Say where, any places you want on the way, and how many days. I check the weather in each place and suggest the best tours from ' + S.settings.home.name + ' and back.'),
-    h('label', { for: 'wiz' }, 'Where do you want to go?'), h('div', { class: 'mu xs' }, 'One region (Kerala), or your places in order: "Varanasi then Ayodhya".'),
-    h('input', { id: 'wiz', class: 'inp', type: 'search', value: w.q, placeholder: 'e.g. Kerala, or Varanasi then Ayodhya', autocomplete: 'off',
-      oninput: (e) => { w.q = e.target.value; suggestFor('wiz', (n) => { w.q = n; render(); })(e); }, onkeydown: (e) => { if (e.key === 'Enter') buildTours(); } }),
+function useTour(tour) { applyTour(tour); }
+function askCard() {
+  const w = wiz(), ws = wst(), has = S.trip.stops.length > 0;
+  const len = has ? ((S.trip.lock && S.trip.target) || totalNights()) : w.nights;
+  const setLen = (n) => { n = clamp(n, 1, 30); w.nights = n; if (has) setTripLength(n); else render(); };
+  const card = h('div', { class: has ? '' : 'card hl', style: has ? 'display:flex;flex-direction:column;gap:10px;margin-top:10px' : null }, has ? null : h('h2', {}, '✨ Make my plan'),
+    h('label', { for: 'wiz' }, 'Where?'),
+    h('input', { id: 'wiz', class: 'inp', type: 'search', value: w.q || '', placeholder: 'Kerala · or · Varanasi then Ayodhya', autocomplete: 'off',
+      oninput: (e) => { w.q = e.target.value; save(); suggestFor('wiz', (n) => { w.q = n; render(); })(e); }, onkeydown: (e) => { if (e.key === 'Enter') buildTours(); } }),
     suggestBox('wiz'),
-    h('label', { for: 'wizinc' }, 'Also include (optional)'),
-    h('div', { class: 'mu xs' }, 'Places you want on the way, e.g. Kanyakumari. Every tour will include them.'),
-    (w.inc || []).length ? h('div', { class: 'row wrap', style: 'gap:6px' }, w.inc.map((n) => h('button', { type: 'button', class: 'pill', 'aria-pressed': 'true', 'aria-label': 'Remove ' + n, onclick: () => { w.inc = w.inc.filter((x) => x !== n); render(); } }, n + '  ×'))) : null,
-    h('input', { id: 'wizinc', class: 'inp', type: 'search', placeholder: 'e.g. Kanyakumari', autocomplete: 'off',
-      oninput: suggestFor('wizinc', (n) => { if (!w.inc.includes(n)) w.inc.push(n); render(); }),
-      onkeydown: (e) => { const val = e.target.value.trim(); if (e.key === 'Enter' && val) { if (!w.inc.includes(val)) w.inc.push(val); if (SUG.wizinc) { SUG.wizinc.items = []; SUG.wizinc.q = ''; } render(); } } }),
-    suggestBox('wizinc'),
-    h('label', {}, 'How many days?'),
-    stepper('days', (w.nights + 1) + ' days · ' + w.nights + (w.nights === 1 ? ' night' : ' nights'), () => { w.nights = clamp(w.nights - 1, 1, 30); render(); }, () => { w.nights = clamp(w.nights + 1, 1, 30); render(); }),
-    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Pick the best time for me'), h('div', { class: 'mu sm' }, 'Uses the climate of each place.')), sw(w.best, 'Pick the best time for me', () => { w.best = !w.best; render(); })),
-    w.best ? null : h('label', { for: 'wizstart' }, 'Start date'),
-    w.best ? null : h('input', { id: 'wizstart', class: 'inp', type: 'date', value: w.start || S.trip.start, onchange: (e) => { if (e.target.value) { w.start = e.target.value; } } }),
-    h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: w.loading ? true : null, onclick: buildTours }, w.loading ? 'Working…' : 'Suggest tours'));
-  if (w.loading) card.append(h('div', { class: 'line' }, h('span', { class: 'spin' }), ' ' + (w.step || 'Working…')));
-  if (w.err) card.append(h('div', { class: 'warnbox sm' }, w.err));
-  if (w.tours && w.tours.length) {
-    card.append(h('div', { class: 'line b' }, w.tours.length + ' tours for ' + w.region + ' · ' + (w.nights + 1) + ' days from ' + nice(w.startUsed, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })));
-    w.tours.forEach((tr) => {
-      card.append(h('div', { style: 'border:1px solid var(--ln);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--sf2)' },
-        h('div', { class: 'row between' }, h('div', { class: 'b', style: 'font-size:16px' }, tr.name), chip('₹' + fmt(tr.est.total))),
-        h('div', { class: 'mu sm' }, tr.note),
-        h('div', { class: 'sm b' }, withPlan(tr.trip, {}, () => routeNames(tr.trip.stops))),
-        tr.trip.stops.map((s) => { const x = tr.wx[s.name]; const vd = verdict(x ? wxScore(x.tmax, x.rain) : null);
-          return h('div', { class: 'row between sm' }, h('span', {}, s.name + ' · ' + s.nights + (s.nights === 1 ? ' night' : ' nights')), h('span', { class: 'row', style: 'gap:6px' }, x ? h('span', { class: 'mu xs' }, x.tmax + '° · rain ' + x.rain + '% of days') : null, chip(vd[0], vd[1]))); }),
-        h('div', { class: 'mu xs' }, 'About ' + fmtH(tr.est.travelH) + ' of travel · ' + [...new Set(tr.est.modes)].join(', ')),
-        h('button', { type: 'button', class: 'btn', onclick: () => useTour(tr) }, 'Use this tour')));
-    });
-    card.append(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: buildTours }, '🔀 Suggest again'), h('button', { type: 'button', class: 'btn2', onclick: () => { w.tours = null; render(); } }, 'Close')),
-      h('div', { class: 'mu xs' }, 'Weather is based on last year for the same month. Costs are estimates from your budget style.'));
-  }
+    h('div', { class: 'mu xs' }, 'A region, a city, or your places in order with "then".'),
+    h('details', { open: (w.inc || []).length ? true : null }, h('summary', { class: 'sm' }, 'Also include a place on the way' + ((w.inc || []).length ? ' (' + w.inc.length + ')' : '')),
+      h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:8px' },
+        (w.inc || []).length ? h('div', { class: 'row wrap', style: 'gap:6px' }, w.inc.map((n) => h('button', { type: 'button', class: 'pill', 'aria-pressed': 'true', 'aria-label': 'Remove ' + n, onclick: () => { w.inc = w.inc.filter((x) => x !== n); save(); render(); } }, n + '  ×'))) : null,
+        h('input', { id: 'wizinc', class: 'inp', type: 'search', placeholder: 'e.g. Kanyakumari', autocomplete: 'off',
+          oninput: suggestFor('wizinc', (n) => { w.inc = w.inc || []; if (!w.inc.includes(n)) w.inc.push(n); save(); render(); }),
+          onkeydown: (e) => { const val = e.target.value.trim(); if (e.key === 'Enter' && val) { w.inc = w.inc || []; if (!w.inc.includes(val)) w.inc.push(val); if (SUG.wizinc) { SUG.wizinc.items = []; SUG.wizinc.q = ''; } save(); render(); } } }),
+        suggestBox('wizinc'))),
+    h('div', { class: 'grid2' },
+      h('div', { style: 'display:flex;flex-direction:column;gap:6px' }, h('label', {}, 'Days'), stepper('days', (len + 1) + ' days', () => setLen(len - 1), () => setLen(len + 1))),
+      h('div', { style: 'display:flex;flex-direction:column;gap:6px' }, h('label', {}, 'People'), stepper('people', S.trip.travellers + (S.trip.travellers === 1 ? ' person' : ' people'), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers - 1, 1, 12); }), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers + 1, 1, 12); })))),
+    h('div', { class: 'row between' }, h('div', { class: 'b sm' }, 'Pick the best time for me'), sw(w.best, 'Pick the best time for me', () => { w.best = !w.best; save(); render(); })),
+    w.best ? h('div', { class: 'mu xs' }, 'I will choose the month with the nicest weather for your places.') : h('div', { style: 'display:flex;flex-direction:column;gap:6px' }, h('label', { for: 'start' }, 'Start date'),
+      h('input', { id: 'start', class: 'inp', type: 'date', value: S.trip.start, onchange: (e) => { if (e.target.value) set((s) => { s.trip.start = e.target.value; s.wdate = ''; s.banner = has ? 'Dates moved to ' + nice(e.target.value) + '. Travel, hotels, weather and days updated.' : ''; }); } })),
+    h('details', {}, h('summary', { class: 'sm' }, 'Budget and food: ' + { budget: 'Budget', comfort: 'Comfort', premium: 'Premium' }[S.settings.budget] + ', ' + { veg: 'Veg', nonveg: 'Non-veg', both: 'Veg and non-veg' }[S.settings.food]),
+      h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:8px' },
+        segs([['budget', 'Budget'], ['comfort', 'Comfort'], ['premium', 'Premium']], S.settings.budget, (v) => set((s) => { s.settings.budget = v; })),
+        segs([['veg', 'Veg'], ['nonveg', 'Non-veg'], ['both', 'Both']], S.settings.food, (v) => set((s) => { s.settings.food = v; })))),
+    h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: ws.loading ? true : null, onclick: buildTours }, ws.loading ? 'Making your plan…' : has ? '🔁 Make a new plan from this' : '✨ Make my plan'));
+  if (ws.loading) card.append(h('div', { class: 'line' }, h('span', { class: 'spin' }), ' ' + (ws.step || 'Working…')));
+  if (ws.err) card.append(h('div', { class: 'warnbox sm' }, ws.err));
   return card;
+}
+function altPlansCard() {
+  const alts = S.trip.alts || [];
+  if (!alts.length) return null;
+  const card = h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'Other plans for this trip'), h('button', { type: 'button', class: 'btn2', onclick: buildTours }, '🔀 More')),
+    h('div', { class: 'mu xs' }, 'Tap Switch to use one. Your tabs change with it.'));
+  alts.forEach((tr) => {
+    const on = tr.name === S.trip.altName && JSON.stringify(tr.trip.stops.map((s) => s.key)) === JSON.stringify(S.trip.stops.map((s) => s.key));
+    card.append(h('div', { style: 'border:' + (on ? '2px solid var(--ac)' : '1px solid var(--ln)') + ';border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--sf2)' },
+      h('div', { class: 'row between' }, h('div', { class: 'b' }, tr.name), chip('₹' + fmt(tr.est.total))),
+      h('div', { class: 'sm' }, tr.trip.stops.map((s) => shortName(s) + ' ' + s.nights + 'n').join(' → ')),
+      h('div', { class: 'mu xs' }, tr.note + ' About ' + fmtH(tr.est.travelH) + ' of travel.'),
+      on ? chip('✓ Current plan') : h('button', { type: 'button', class: 'btn2', onclick: () => applyTour(tr) }, 'Switch to this')));
+  });
+  return card;
+}
+function ideasCard() {
+  return h('div', { class: 'card' }, h('h2', {}, 'Ideas to start from'), h('div', { class: 'mu sm' }, 'Popular routes. Tap one to make it your plan, then change anything.'),
+    PRESETS.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu sm' }, p.note + ' ' + (p.stops.reduce((a, x) => a + x[1], 0) + 1) + ' days.')),
+      h('button', { type: 'button', class: 'btn2', onclick: () => loadPreset(p) }, 'Use'))));
 }
 
 function exploreCard() {
@@ -1432,7 +1455,7 @@ function money(usd) { const inr = usdToInr(usd); return '$' + usd.toFixed(usd < 
 /* ============================================================
    Rendering
    ============================================================ */
-const TABS = [['plan', 'Plan', '🧭'], ['route', 'Route', '🛤️'], ['trip', 'Trip', '📊'], ['days', 'Days', '📅'], ['weather', 'Weather', '⛅'], ['wallet', 'Wallet', '👛']];
+const TABS = [['plan', 'Plan', '🧭'], ['route', 'Travel', '🚆'], ['places', 'Places', '📍'], ['days', 'Days', '📅'], ['weather', 'Weather', '⛅'], ['trip', 'Costs', '💰']];
 let renderQueued = false;
 function render() {
   if (renderQueued) return;
@@ -1450,7 +1473,7 @@ function renderNow() {
   if (S.banner && S.banner !== mem.lastToast) { mem.lastToast = S.banner; toast(S.banner); }
   if (!S.banner) mem.lastToast = '';
   document.getElementById('fab').hidden = S.tab === 'settings' || !!mem.sheet;
-  const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings, compare: viewCompare, place: viewPlace }[S.tab] || viewPlan;
+  const view = { plan: viewPlan, route: viewRoute, trip: viewTrip, days: viewDays, weather: viewWeather, wallet: viewWallet, settings: viewSettings, compare: viewCompare, place: viewPlace, places: viewPlaces, wallet: viewTrip }[S.tab] || viewPlan;
   try { view().forEach((n) => n && main.append(n)); }
   catch (e) { main.append(h('div', { class: 'card' }, h('h2', {}, 'Something went wrong'), h('div', { class: 'sm' }, String(e && e.message || e)))); console.error(e); }
   main.dataset.tab = S.tab;
@@ -1593,15 +1616,63 @@ function viewPlace() {
   return out;
 }
 
+/* ----- Places: every sight per place, in your days or not, opt in or out ----- */
+function scheduledNames() {
+  const out = {};
+  itinerary().forEach((d) => d.items.forEach((it) => { if (it.tag === 'See' && it.stopKey) { (out[it.stopKey] = out[it.stopKey] || new Set()).add(it.title); } }));
+  return out;
+}
+function viewPlaces() {
+  if (!S.trip.stops.length) return [h('h1', {}, 'Places'), empty()];
+  const out = [h('div', {}, h('h1', {}, 'Places'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Everything worth seeing in each place. ✓ Must visit puts it in your days, ✗ Skip takes it out. Your Days tab changes with it.')), bannerEl()];
+  const sched = scheduledNames();
+  const i = clamp(S.pstop || 0, 0, S.trip.stops.length - 1);
+  out.push(h('div', { class: 'row wrap' }, S.trip.stops.map((x, k) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(k === i), onclick: () => set((y) => { y.pstop = k; }) }, shortName(x) + ' · ' + x.nights + 'n'))));
+  const s = S.trip.stops[i], r = R[s.key] || {}, v = r.voyage, place = shortName(s);
+  if (!v) { if (!isBusy(s.key, 'voyage')) researchStop(s, false); out.push(h('div', { class: 'card' }, h('div', {}, h('span', { class: 'spin' }), ' Reading the guide for ' + place + '…'))); return out; }
+  const must = (S.trip.must || {})[s.key] || [], skipped = (S.trip.skip || {})[s.key] || [];
+  const inDays = sched[s.key] || new Set();
+  const sights = (v.see || []).concat(v.do || []);
+  const missing = sights.filter((x) => !inDays.has(x.name) && !skipped.includes(x.name));
+  out.push(h('div', { class: 'card hl' }, h('div', { class: 'row between' }, h('h2', {}, place), h('button', { type: 'button', class: 'btn2', onclick: () => openPlace(s.key) }, 'Full page')),
+    h('div', { class: 'grid2' }, statBox('In your days', inDays.size + ' of ' + sights.length), statBox('Not yet', String(missing.length))),
+    missing.length ? h('div', { class: 'sm' }, missing.length > 3 ? 'To fit more, tap ✓ on the ones you want (others make room), or add a day.' : 'A few places are not in your days yet.') : h('div', { class: 'sm' }, 'Everything listed is in your days.'),
+    h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => addNight(s.key, 1) }, '＋ Add a day in ' + place), S.trip.lock ? h('button', { type: 'button', class: 'btn2', onclick: () => changeNights(s.key, 1) }, '＋ Night here, keep trip length') : null)));
+  const row = (x) => {
+    const on = must.includes(x.name), off = skipped.includes(x.name), sch = inDays.has(x.name);
+    return h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:6px;opacity:' + (off ? 0.55 : 1) },
+      h('div', { class: 'row between' }, h('div', { class: 'b' }, x.name), off ? chip('Skipped', 'plain') : sch ? chip(on ? '✓ Must visit' : 'In your days') : chip('Not in days', 'warn')),
+      x.price ? h('div', { class: 'sm b', style: 'color:var(--ac)' }, x.price) : null,
+      x.text ? h('div', { class: 'sm mu' }, x.text.length > 170 ? x.text.slice(0, 170) + '…' : x.text) : null,
+      h('div', { class: 'row wrap' },
+        off ? h('button', { type: 'button', class: 'btn2', onclick: () => set((S2) => { S2.trip.skip[s.key] = skipped.filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is back in the list.'; }) }, 'Undo skip')
+          : on ? h('button', { type: 'button', class: 'btn2', 'aria-pressed': 'true', onclick: () => removeSight(s.key, x.name) }, '✓ Must visit')
+          : h('button', { type: 'button', class: 'btn2', onclick: () => { addSight(s.name, s.key, x.name); set((S2) => { S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is now in your ' + place + ' days.'; }); } }, '✓ Must visit'),
+        off ? null : h('button', { type: 'button', class: 'btn2', onclick: () => set((S2) => { S2.trip.skip = S2.trip.skip || {}; S2.trip.skip[s.key] = skipped.concat([x.name]); S2.trip.must = S2.trip.must || {}; S2.trip.must[s.key] = (S2.trip.must[s.key] || []).filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = 'Skipped "' + x.name + '". Days updated.'; }) }, '✗ Skip'),
+        ext(mapLink(x.name, place), 'Map', 'btn2')));
+  };
+  const notIn = sights.filter((x) => !inDays.has(x.name) && !skipped.includes(x.name));
+  const yes = sights.filter((x) => inDays.has(x.name));
+  const no = sights.filter((x) => skipped.includes(x.name));
+  if (notIn.length) out.push(h('div', { class: 'card' }, h('h2', {}, 'Not in your days yet (' + notIn.length + ')'), notIn.map(row)));
+  if (yes.length) out.push(h('div', { class: 'card' }, h('h2', {}, 'In your days (' + yes.length + ')'), yes.map(row)));
+  if (no.length) out.push(h('div', { class: 'card' }, h('h2', {}, 'Skipped (' + no.length + ')'), no.map(row)));
+  if (!sights.length) out.push(h('div', { class: 'card' }, h('div', {}, 'The guide lists no sights for ' + place + '.'), ext(v.url, 'Open the guide', 'btn2')));
+  const trips = (v.gonext || []).concat((v.dests || []).filter((d) => !(v.gonext || []).some((g) => g.name === d.name)));
+  if (trips.length) out.push(h('div', { class: 'card' }, h('h2', {}, 'Nearby places you could add'),
+    trips.slice(0, 8).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? h('div', { class: 'mu xs' }, x.text.slice(0, 130)) : null),
+      S.trip.stops.some((y) => y.key === keyOf(x.name)) ? chip('✓ In trip') : h('button', { type: 'button', class: 'btn2', onclick: () => addStop(x.name, i + 1) }, '＋ Add')))));
+  out.push(exploreCard());
+  return out;
+}
+
 /* ----- Plan ----- */
 function viewPlan() {
   const st = S.trip.stops;
-  const out = [h('div', {}, h('h1', {}, 'Where to next?'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Explore a place, tap what you like, and it goes into your trip.'))];
-  if (S.trip.stops.length) out.push(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn', onclick: () => savePlan(true) }, '💾 Save plan & start new'), h('button', { type: 'button', class: 'btn2', onclick: () => { if (S.trip.stops.length && !S.plans.some((p) => JSON.stringify(p.trip.stops) === JSON.stringify(S.trip.stops))) { set((s) => { s.banner = 'This trip is not saved. Tap "Save plan & start new" to keep it, or tap New trip again to discard it.'; }); if (mem.confirmNew) { mem.confirmNew = false; newTrip(); } else mem.confirmNew = true; return; } newTrip(); } }, '🆕 New trip')));
-  out.push(wizardCard());
-  out.push(exploreCard());
-  out.push(bannerEl());
-  const list = h('div', { class: 'card' }, h('h2', {}, 'Your route'),
+  const out = [h('div', {}, h('h1', {}, 'Plan my trip'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Tell me where and for how long. I make the plan; switch it or add places and every tab follows.')), bannerEl()];
+  if (!st.length) out.push(askCard());
+  if (!st.length) { out.push(ideasCard()); out.push(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.back = 'plan'; s.tab = 'settings'; }) }, '📂 My saved plans'))); return out; }
+  const list = h('div', { class: 'card' }, h('h2', {}, 'Your places'),
     h('div', { class: 'mu sm' }, routeNames(st)));
   st.forEach((s, i) => {
     const r = R[s.key] || {};
@@ -1626,34 +1697,24 @@ function viewPlan() {
   list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' }, h('label', { for: 'newstop' }, 'Add a place'),
     h('div', { class: 'row' }, inp, h('button', { type: 'button', class: 'btn', onclick: () => { mem.draft = ''; addStop(inp.value); } }, 'Add')), suggestBox('newstop')));
   if (st.length >= 2) list.append(h('button', { type: 'button', class: 'btn2', onclick: bestOrder }, 'Find the best order'));
-  list.append(h('button', { type: 'button', class: 'btn', style: 'min-height:54px;font-size:17px', disabled: mem.researching ? true : null, onclick: () => planNow(false) }, mem.researching ? 'Researching…' : 'Research my trip'));
-  if (st.length) list.append(h('button', { type: 'button', class: 'btn2', onclick: () => planNow(true) }, 'Refresh all research'));
+  list.append(h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: differentPlan }, '🔀 Different sights'), h('button', { type: 'button', class: 'btn2', disabled: mem.researching ? true : null, onclick: () => planNow(true) }, mem.researching ? 'Refreshing…' : '🔄 Refresh info')));
   const summary = planSummaryCard();
-  if (summary) out.splice(1, 0, summary);
+  if (summary) out.push(summary);
+  const alt = altPlansCard(); if (alt) out.push(alt);
+  out.push(h('details', { class: 'card', open: mem.askOpen || wst().loading || wst().err ? true : null, ontoggle: (e) => { mem.askOpen = e.target.open; } },
+    h('summary', { class: 'b' }, '✏️ Change where, days, people or dates'), askCard()));
   out.push(list);
-  if (st.length) { const sc = suggestCard(); if (sc) out.push(sc); out.push(startFinishCard()); }
-
-  out.push(h('div', { class: 'card' }, h('h2', {}, 'Dates and travellers'),
-    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Free style'), h('div', { class: 'mu sm' }, 'Let the app pick the best month from the climate of your places.')),
-      sw(S.trip.free, 'Free style', () => set((s) => { s.trip.free = !s.trip.free; }))),
-    S.trip.free ? freeStyleBox() : null,
-    h('label', { for: 'start' }, 'Start date'),
-    h('input', { id: 'start', class: 'inp', type: 'date', value: S.trip.start, onchange: (e) => { if (e.target.value) set((s) => { s.trip.start = e.target.value; }); } }),
-    h('div', { class: 'mu sm' }, st.length ? totalNights() + ' nights, back on ' + nice(addDays(S.trip.start, totalNights()), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''),
-    st.length ? h('div', { style: 'display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--ln);padding-top:10px' },
-      h('label', {}, 'Trip length'),
-      stepper('days', ((S.trip.lock && S.trip.target) || totalNights()) + 1 + ' days · ' + ((S.trip.lock && S.trip.target) || totalNights()) + ' nights', () => setTripLength(((S.trip.lock && S.trip.target) || totalNights()) - 1), () => setTripLength(((S.trip.lock && S.trip.target) || totalNights()) + 1)),
-      h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Keep my trip length fixed'), h('div', { class: 'mu sm' }, 'Adding a place re-shares the nights instead of making the trip longer.')),
-        sw(S.trip.lock, 'Keep my trip length fixed', () => set((s) => { s.trip.lock = !s.trip.lock; if (s.trip.lock && !s.trip.target) s.trip.target = totalNights(); s.banner = s.trip.lock ? 'Trip length fixed at ' + (s.trip.target + 1) + ' days.' : 'Trip length is free: adding places adds nights.'; }))),
-      h('button', { type: 'button', class: 'btn2', onclick: bestFit }, '⚖️ Best fit for ' + (((S.trip.lock && S.trip.target) || totalNights()) + 1) + ' days')) : null,
-    h('label', {}, 'Travellers'),
-    stepper('travellers', S.trip.travellers + (S.trip.travellers === 1 ? ' person' : ' people'), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers - 1, 1, 12); }), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers + 1, 1, 12); })),
-    h('label', {}, 'Budget style'), segs([['budget', 'Budget'], ['comfort', 'Comfort'], ['premium', 'Premium']], S.settings.budget, (v) => set((s) => { s.settings.budget = v; })),
-    h('label', {}, 'Food'), segs([['veg', 'Veg'], ['nonveg', 'Non-veg'], ['both', 'Both']], S.settings.food, (v) => set((s) => { s.settings.food = v; }))));
-
-  out.push(h('div', { class: 'card' }, h('h2', {}, 'Ready-made plans'), h('div', { class: 'mu sm' }, 'Start from a popular route, then change anything.'),
-    PRESETS.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu sm' }, p.note + ' ' + p.stops.reduce((a, x) => a + x[1], 0) + ' nights.')),
-      h('button', { type: 'button', class: 'btn2', onclick: () => loadPreset(p) }, 'Use')))));
+  list.append(h('div', { class: 'line', style: 'display:flex;flex-direction:column;gap:8px' },
+    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'Keep my trip at ' + (((S.trip.lock && S.trip.target) || totalNights()) + 1) + ' days'), h('div', { class: 'mu xs' }, 'Adding a place re-shares the nights instead of making the trip longer.')),
+      sw(S.trip.lock, 'Keep my trip length fixed', () => set((s) => { s.trip.lock = !s.trip.lock; if (s.trip.lock && !s.trip.target) s.trip.target = totalNights(); }))),
+    h('button', { type: 'button', class: 'btn2', onclick: bestFit }, '⚖️ Best fit for ' + (((S.trip.lock && S.trip.target) || totalNights()) + 1) + ' days')));
+  const sc = suggestCard(); if (sc) out.push(sc);
+  out.push(startFinishCard());
+  out.push(h('div', { class: 'row wrap' },
+    h('button', { type: 'button', class: 'btn2', onclick: () => savePlan(false) }, '💾 Save'),
+    h('button', { type: 'button', class: 'btn2', onclick: newTrip }, '🆕 New trip'),
+    h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.back = 'plan'; s.tab = 'settings'; }) }, '📂 Saved plans')),
+    h('div', { class: 'mu xs' }, 'Your current trip is kept on this phone automatically. New trip files it under Saved plans for you.'));
   return out;
 }
 function insertBetween(at, a, b) {
@@ -1705,7 +1766,7 @@ async function planNow(force) {
     await researchAll(false);
   } finally { mem.researching = false; }
   const ok = S.trip.stops.filter((s) => R[s.key] && R[s.key].voyage).length;
-  set((s) => { s.banner = ok ? 'Your plan is ready at the top of this page. Not happy? Tap "Different plan", add a place between stops, or remove sights you do not like on the Days tab.' : 'Research finished, but the travel guide could not be loaded. See the red notes under each place.'; });
+  set((s) => { s.banner = ok ? 'Your plan is ready: ' + routeNames(S.trip.stops) + '. Travel, Places, Days, Weather and Costs are filled in.' : 'Research finished, but the travel guide could not be loaded. See the red notes under each place.'; });
   const m = document.getElementById('main'); if (m) m.scrollTop = 0;
 }
 function planSummaryCard() {
@@ -1742,6 +1803,7 @@ function planSummaryCard() {
       h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.tab = 'days'; s.dsub = 'plan'; s.banner = ''; }) }, 'Day-by-day plan'),
       h('button', { type: 'button', class: 'btn2', onclick: differentPlan }, '🔀 Different plan'),
       h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.back = s.tab; s.tab = 'compare'; }) }, '⚖️ Compare plans'),
+      h('button', { type: 'button', class: 'btn2', onclick: () => { mem.askOpen = true; render(); setTimeout(() => { const el = document.getElementById('start'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 120); } }, '📅 Change dates, days or people'),
       h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'route'; s.banner = ''; }) }, 'Travel and local transport'),
       h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.tab = 'trip'; s.banner = ''; }) }, 'Costs and checks')));
   return card;
@@ -1771,11 +1833,14 @@ function freeStyleBox() {
 
 /* ----- Route ----- */
 function viewRoute() {
-  if (!S.trip.stops.length) return [h('h1', {}, 'Route'), empty()];
-  const out = [h('div', {}, h('h1', {}, 'Route'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Getting between places, and getting around each one.')),
+  if (!S.trip.stops.length) return [h('h1', {}, 'Travel'), empty()];
+  const out = [h('div', {}, h('h1', {}, 'Travel'), h('p', { class: 'mu', style: 'margin:6px 0 0' }, 'Train, bus, car or flight between your places, with costs for your group.')),
+    h('div', { class: 'card' }, h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'b' }, 'How many people?'), h('div', { class: 'mu xs' }, 'All fares and car sizes use this.')),
+      stepper('people', S.trip.travellers + (S.trip.travellers === 1 ? ' person' : ' people'), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers - 1, 1, 12); }), () => set((s) => { s.trip.travellers = clamp(s.trip.travellers + 1, 1, 12); })))),
     segs([['legs', 'Between places'], ['local', 'Getting around']], S.rsub, (v) => set((s) => { s.rsub = v; })), bannerEl()];
   if (S.rsub === 'legs') {
     const L = legs();
+    if (L.length) { const tot = L.reduce((a, l) => a + l.sel.total, 0); out.push(h('div', { class: 'card hl' }, h('div', { class: 'row between' }, h('h2', {}, 'Your travel'), chip('₹' + fmt(tot) + ' for ' + S.trip.travellers)), L.map((l) => h('div', { class: 'kv sm' }, h('span', {}, nice(l.date) + ' · ' + l.a.name + ' → ' + l.b.name), h('span', {}, l.sel.label.replace(/ \(.*\)/, '') + ' · ₹' + fmt(l.sel.total)))))); const wc = wholeTripModes(); if (wc) out.push(wc); }
     if (!L.length) { out.push(h('div', { class: 'card' }, h('div', {}, 'Research your places first so I know where they are.'), h('button', { type: 'button', class: 'btn', onclick: () => researchAll(false) }, 'Research my trip'))); return out; }
     out.push(h('div', { class: 'card hl' }, h('div', { class: 'b' }, [L[0].a.name].concat(L.map((l) => l.b.name)).join(' → ')),
       h('div', { class: 'mu sm' }, 'About ' + fmt(L.reduce((a, l) => a + l.road, 0)) + ' km by road in ' + L.length + ' legs.'),
@@ -1832,7 +1897,15 @@ function viewRoute() {
 
 /* ----- Trip ----- */
 function viewTrip() {
-  if (!S.trip.stops.length) return [h('h1', {}, 'Trip'), empty()];
+  const head = [h('h1', {}, 'Costs'), segs([['sum', 'Summary'], ['exp', 'Expenses'], ['docs', 'Documents'], ['visa', 'Visa']], S.csub || 'sum', (v) => set((s) => { s.csub = v; }))];
+  const sub = S.csub || 'sum';
+  if (sub === 'exp') return head.concat(expensesView());
+  if (sub === 'docs') return head.concat(docsView());
+  if (sub === 'visa') return head.concat(visaView());
+  if (!S.trip.stops.length) return head.concat([empty()]);
+  return head.concat(costSummary());
+}
+function costSummary() {
   const c = costs(), n = totalNights();
   const out = [bannerEl()];
   out.push(h('div', { class: 'hero' },
@@ -1885,8 +1958,7 @@ function viewTrip() {
       intl.length ? h('div', { class: 'line row' }, h('label', { for: 'visaT', class: 'grow' }, 'Visa fees, all travellers'), h('input', { id: 'visaT', class: 'inp', style: 'width:130px', inputmode: 'numeric', value: String(S.trip.over.visaTotal || 0), onchange: (e) => set((x) => { x.trip.over.visaTotal = Number(String(e.target.value).replace(/[^0-9.]/g, '')) || 0; }) })) : null),
     h('div', { class: 'mu xs' }, 'Estimates, not quotes. Transport uses distance; stay and food use your budget style.'));
   out.push(cc);
-  const wc = wholeTripModes();
-  if (wc) out.push(wc);
+
 
   // best time
   const sc = bestMonths();
@@ -1976,15 +2048,17 @@ function currencyCard(curs) {
 /* ----- Days ----- */
 function viewDays() {
   if (!S.trip.stops.length) return [h('h1', {}, 'Days'), empty()];
-  const out = [h('h1', {}, 'Your ' + totalNights() + ' days'), segs([['plan', 'Itinerary'], ['stay', 'Stay'], ['food', 'Food'], ['tix', 'Tickets']], S.dsub, (v) => set((s) => { s.dsub = v; })), bannerEl()];
+  const out = [h('h1', {}, 'Day by day'), segs([['plan', 'Itinerary'], ['stay', 'Stay'], ['food', 'Food'], ['tix', 'Tickets']], S.dsub, (v) => set((s) => { s.dsub = v; })), bannerEl()];
   if (S.dsub === 'plan') {
     out.push(h('div', { class: 'mu sm' }, 'Built from the travel guide. Swap or remove any sight, add your own places to a day, or get a whole new plan.'),
       h('button', { type: 'button', class: 'btn', onclick: differentPlan }, '🔀 Give me a different plan'));
     const skippedCount = Object.values(S.trip.skip || {}).reduce((a, x) => a + x.length, 0);
     if (skippedCount) out.push(h('button', { type: 'button', class: 'btn2', onclick: () => set((s) => { s.trip.skip = {}; s.banner = 'Removed sights are back in the plan.'; }) }, 'Bring back ' + skippedCount + ' removed ' + (skippedCount === 1 ? 'place' : 'places')));
     const days = itinerary();
+    out.push(h('div', { class: 'card' }, h('h2', {}, 'At a glance'),
+      days.map((d, di) => h('div', { class: 'kv sm' }, h('span', {}, h('b', {}, 'Day ' + (di + 1)), ' · ' + nice(d.date)), h('span', { style: 'font-weight:500' }, shortName(d.stop) + (d.items.some((x) => x.tag === 'Travel') ? ' 🚆' : '') + ' · ' + d.items.filter((x) => x.tag === 'See' || x.tag === 'Day trip').length + ' sights')))));
     days.forEach((d, di) => {
-      out.push(h('div', { class: 'card' }, h('div', { class: 'row' }, chip('Day ' + (di + 1)), h('h2', { class: 'grow' }, d.title), h('span', { class: 'mu xs' }, nice(d.date))),
+      out.push(h('div', { class: 'card' }, h('div', { class: 'row' }, chip('Day ' + (di + 1)), h('div', { class: 'grow' }, h('h2', {}, nice(d.date, { weekday: 'long', day: 'numeric', month: 'short' })), h('div', { class: 'mu sm' }, d.title))),
         d.items.map((it) => itemRow(it, di, d)),
         addToDay(d)));
       const next = days[di + 1];
@@ -2171,8 +2245,8 @@ function viewSettings() {
       S.plans.map((p) => h('div', { class: 'line row' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, p.name), h('div', { class: 'mu xs' }, p.meta)),
         h('button', { type: 'button', class: 'btn', onclick: () => openPlan(p) }, 'Open'),
         h('button', { type: 'button', class: 'ibtn', 'aria-label': 'Delete plan', onclick: () => set((s) => { s.plans = s.plans.filter((x) => x.id !== p.id); }) }, '×'))),
-      h('button', { type: 'button', class: 'btn2', disabled: S.trip.stops.length ? null : true, onclick: () => savePlan(true) }, 'Save current plan and start a new one'),
-      h('button', { type: 'button', class: 'btn2', disabled: S.trip.stops.length ? null : true, onclick: () => savePlan(false) }, 'Save and keep working on it'),
+      h('button', { type: 'button', class: 'btn2', disabled: S.trip.stops.length ? null : true, onclick: () => savePlan(false) }, '💾 Save current plan'),
+      h('button', { type: 'button', class: 'btn2', onclick: newTrip }, '🆕 New trip (keeps the current one here)'),
       h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: exportPlans }, 'Export to file'), h('label', { for: 'imp', class: 'btn2', style: 'font-size:15px' }, 'Import from file'), fileIn)),
     h('div', { class: 'card' }, h('h2', {}, 'Appearance'), segs([['sunset', 'Sunset'], ['midnight', 'Midnight'], ['daylight', 'Daylight']], st.theme, (v) => set((s) => { s.settings.theme = v; }))),
     h('div', { class: 'card' }, h('h2', {}, 'My defaults'),
@@ -2191,26 +2265,33 @@ function viewSettings() {
 function freshTrip() { return Object.assign(structuredClone(DEFAULTS.trip), { start: addDays(todayIso(), 45), travellers: S.trip.travellers || 2 }); }
 function clearDesk(s) {
   s.trip = freshTrip(); s.check = null; s.wdate = ''; s.wdateFor = ''; s.wstop = 0; s.lstop = 0; s.expenses = []; s.docs = {}; s.placeKey = null;
-  mem.wiz = null; mem.exploreKey = null; mem.exploreQ = ''; mem.draft = ''; mem.insertAt = null; mem.addDay = null; mem.left = {};
+  mem.ws = null; mem.exploreKey = null; mem.exploreQ = ''; mem.draft = ''; mem.insertAt = null; mem.addDay = null; mem.left = {};
   Object.keys(SUG).forEach((k) => delete SUG[k]);
 }
+function storeCurrent(s) {
+  if (!s.trip.stops.length) return null;
+  s.trip.id = s.trip.id || Date.now();
+  const n = s.trip.stops.reduce((a, x) => a + x.nights, 0);
+  const name = s.trip.stops.map(shortName).join(' → ');
+  const entry = { id: s.trip.id, name, meta: (n + 1) + ' days from ' + nice(s.trip.start) + ' · ' + s.trip.travellers + (s.trip.travellers === 1 ? ' person' : ' people') + ' · saved ' + new Date().toLocaleDateString('en-GB'),
+    trip: structuredClone(s.trip), expenses: structuredClone(s.expenses), docs: structuredClone(s.docs), check: s.check && !s.check.loading ? structuredClone(s.check) : null };
+  s.plans = s.plans.filter((p) => p.id !== s.trip.id).concat([entry]);
+  return name;
+}
 function savePlan(andClear) {
-  if (!S.trip.stops.length) return set((s) => { s.banner = 'Nothing to save yet. Add a place first.'; });
-  const n = totalNights();
-  const name = S.trip.name || S.trip.stops.map(shortName).join(' → ');
+  if (!S.trip.stops.length) return set((s) => { s.banner = 'Nothing to save yet.'; });
   set((s) => {
-    s.plans = s.plans.filter((p) => p.name !== name).concat([{ id: Date.now(), name, meta: (n + 1) + ' days from ' + nice(s.trip.start) + ' · saved ' + new Date().toLocaleDateString('en-GB'), trip: structuredClone(s.trip), expenses: structuredClone(s.expenses), docs: structuredClone(s.docs), check: s.check && !s.check.loading ? structuredClone(s.check) : null }]);
-    if (andClear !== false) { clearDesk(s); s.tab = 'plan'; s.banner = 'Saved "' + name + '". The desk is clear for your next trip. Open saved plans any time from ⚙️ Settings.'; }
+    const name = storeCurrent(s);
+    if (andClear === true) { clearDesk(s); s.tab = 'plan'; s.banner = 'Saved "' + name + '". The desk is clear for your next trip.'; }
     else s.banner = 'Saved "' + name + '".';
   });
-  const m = document.getElementById('main'); if (m) m.scrollTop = 0;
 }
 function newTrip() {
-  set((s) => { clearDesk(s); s.tab = 'plan'; s.banner = 'New trip: the desk is clear. Your saved plans are in ⚙️ Settings.'; });
+  set((s) => { const name = storeCurrent(s); clearDesk(s); s.tab = 'plan'; s.banner = name ? '"' + name + '" is kept in Saved plans. The desk is clear.' : 'The desk is clear.'; });
   const m = document.getElementById('main'); if (m) m.scrollTop = 0;
 }
 function openPlan(p) {
-  set((s) => { clearDesk(s); s.trip = Object.assign(freshTrip(), structuredClone(p.trip)); s.expenses = structuredClone(p.expenses || []); s.docs = structuredClone(p.docs || {}); s.check = p.check ? structuredClone(p.check) : null; s.tab = 'plan'; s.banner = 'Opened "' + p.name + '".'; });
+  set((s) => { storeCurrent(s); clearDesk(s); s.trip = Object.assign(freshTrip(), structuredClone(p.trip)); s.trip.id = p.id; s.expenses = structuredClone(p.expenses || []); s.docs = structuredClone(p.docs || {}); s.check = p.check ? structuredClone(p.check) : null; s.tab = 'plan'; s.banner = 'Opened "' + p.name + '".'; });
   const m = document.getElementById('main'); if (m) m.scrollTop = 0;
 }
 function exportPlans() {
@@ -2250,14 +2331,14 @@ function renderSheet() {
     h('div', { class: 'mu sm' }, st.length ? routeNames(st) : 'No places yet.'),
     h('label', { for: 'qadd' }, 'Search and add a place'), qadd, suggestBox('qadd'),
     h('div', { class: 'grid2' },
-      h('button', { type: 'button', class: 'btn', onclick: run(() => { set((s) => { s.tab = 'plan'; }); setTimeout(() => { const m = document.getElementById('main'); m.scrollTop = 0; const el = document.getElementById('wiz'); if (el) el.focus(); }, 120); }) }, '✨ Plan a trip for me'),
+      h('button', { type: 'button', class: 'btn', onclick: run(() => { set((s) => { s.tab = 'plan'; }); setTimeout(() => { const m = document.getElementById('main'); m.scrollTop = 0; const el = document.getElementById('wiz'); if (el) el.focus(); }, 120); }) }, '✨ Make my plan'),
       h('button', { type: 'button', class: 'btn2', onclick: run(() => planNow(false)) }, '🔎 Research my trip'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length < 2 ? true : null, onclick: run(bestOrder) }, '🧭 Best order'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(differentPlan) }, '🔀 Different plan'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => set((s) => { if (s.tab !== 'compare') s.back = s.tab; s.tab = 'compare'; })) }, '⚖️ Compare plans'),
       h('button', { type: 'button', class: 'btn2', onclick: run(() => { set((s) => { s.tab = 'plan'; }); setTimeout(() => { const m = document.getElementById('main'); m.scrollTop = 0; const el = document.getElementById('explore'); if (el) el.focus(); }, 120); }) }, '🗺️ Explore a place'),
       h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => set((s) => { s.tab = 'days'; s.dsub = 'plan'; })) }, '📅 Day plan'),
-      h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => savePlan(true)) }, '💾 Save & start new'),
+      h('button', { type: 'button', class: 'btn2', disabled: st.length ? null : true, onclick: run(() => savePlan(false)) }, '💾 Save'),
       h('button', { type: 'button', class: 'btn2', onclick: run(newTrip) }, '🆕 New trip')),
     h('h3', {}, 'Ready-made plans'),
     h('div', { class: 'row wrap', style: 'gap:6px' }, PRESETS.map((p) => h('button', { type: 'button', class: 'pill', onclick: run(() => loadPreset(p)) }, p.name))),
