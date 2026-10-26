@@ -1,6 +1,6 @@
 /* Trip Desk service worker: opens offline with the last version you loaded.
    The app is fetched fresh from the network first (skipping the browser cache) so updates show straight away. */
-const CACHE = 'tripdesk-shell-v5';
+const CACHE = 'tripdesk-shell-v6';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
