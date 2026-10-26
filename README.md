@@ -6,14 +6,14 @@ Claude is used only when you tap **Check my plan**, through your own Apps Script
 ## Tabs
 | Tab | What it does |
 |---|---|
-| 🧭 Plan | Type a main location (a state, region or city). Tick the places around it you want, add your own, set the start date, days and people, and tap Make my plan: the best order and nights for your days. Below: ready-made itineraries from the travel guide (＋ Add to my trip), links to MakeMyTrip, Thrillophilia, TripAdvisor and Yatra packages, and "Find real packages with Claude". Then your trip, the tour plan and saved plans. |
+| 🧭 Plan | Type a main location (a state, region or city), or several places in order ("Varanasi then Ayodhya"). Tick the places around it you want, add your own, set the start date, days and people, and tap Make my plan: the best order and nights for your days. Below: ready-made itineraries from the travel guide (＋ Add to my trip), links to MakeMyTrip, Thrillophilia, TripAdvisor and Yatra packages, and "Find real packages with Claude". Then your trip, the tour plan and saved plans. |
 | 🚆 Travel | Train, Bus, Sedan, SUV, Taxi or Flight for each leg, with every booking link (IRCTC, ixigo, redBus, Savaari, Google Flights, MakeMyTrip and more). Total for the group and the cheapest possible total. |
 | 📍 Places | The complete day-wise plan with a map for each day, and every place to see with ＋ Add to my trip, ★ Must see and ✗ Skip; changes update every tab. Main places nearby and the latest vlogs, newest first. |
 | 🏨 Stay | Choose Best, Mid-range or Low budget: hotels, food and travel tickets of that level, with maps and booking links. Tickets to book. |
 | ⛅ Weather | Weather for each day of your trip dates, the best time to go and a packing list. |
 | 💰 Cost | Summary, Expenses, Documents and Visa. Also the optional Claude plan check. |
 
-Dark, photo-first look. The app checks for a new version each time it opens and reloads itself once when one arrives.
+Photo-first look in 🌙 Dark or ☀️ Day theme (button at the top, or ⚙️ Settings → Theme; Auto follows the phone). The app checks for a new version each time it opens and reloads itself once when one arrives.
 
 **After updating:** paste the new `backend/Code.gs` into Apps Script and make a new version (step 10 below) to use "Find real packages with Claude".
 
