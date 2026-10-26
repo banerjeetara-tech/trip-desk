@@ -3,19 +3,18 @@
 Personal trip planner PWA. Free-first: all research comes live from free public sources with no API key.
 Claude is used only when you tap **Check my plan**, through your own Apps Script backend, and every check shows its cost.
 
-## How it works
-Three tabs:
-- **Plan**: type a region or your places in order ("Varanasi then Ayodhya"), pick days and people, tap Make my plan.
-  You get the trip at a glance and a route timeline: every place with its dates, nights and usual weather, and every
-  journey between places. Tap a journey to switch train, bus, car or flight. Extra tools (other plans, nights per place,
-  best time to go, explore a place, saved trips) are folded away until you open them.
-- **Days**: a day-by-day plan from arrival to the trip home, with the weather for each day. Each day keeps nearby sights
-  together. Swap or remove a sight, or add your own. **Places** shows each place's map, sights, hotels by price, food,
-  local transport, day trips, news and vlogs.
-- **Costs**: the estimated total and where it goes, your limit, your own prices, currency and the optional Claude check.
-  **Split** shares expenses between travellers, and **Checklist** covers documents, visa and a packing list for the weather.
+## Tabs
+| Tab | What it does |
+|---|---|
+| 🧭 Plan | Type places in order ("Varanasi then Ayodhya") or a region ("Kerala"). Set days, people and start date. The tour plan is prepared automatically. Switch between tour options, add or remove places, reorder, and see saved plans. |
+| 🚆 Travel | Choose Train, Bus, Sedan, SUV, Taxi or Flight for each leg. Each leg keeps its own choice. A total for the head count appears at the end, with the cheapest possible total for comparison. |
+| 📍 Places | What to see in each place, with ＋ Add to plan, ★ Must see and ✗ Skip. Changes update the Plan tab. Main places nearby, a map, and recent vlogs sorted newest first. |
+| 🏨 Stay | Hotels (Budget, Mid-range, Luxury), Food, Itinerary and Tickets. |
+| ⛅ Weather | Weather for your trip dates, the best time to go and a packing list. |
+| 💰 Cost | Summary, Expenses, Documents and Visa. Also the optional Claude plan check. |
 
-Light and dark themes in teal and sand (Settings → Appearance, or follow the phone).
+Light and dark themes in teal and sand (⚙️ Settings → Appearance, or follow the phone). The app checks for a new
+version each time it opens and reloads itself once when one arrives.
 
 ## Files
 - `index.html`: the app (GitHub Pages serves it at `https://banerjeetara-tech.github.io/trip-desk/`)
@@ -42,7 +41,7 @@ Everything you change (order, nights, train or bus, swaps) is recalculated on th
 2. Create an Apps Script project, paste `backend/Code.gs` and `backend/appsscript.json`.
 3. Script properties: `ANTHROPIC_API_KEY`, `APP_PASSCODE`, optional `DAILY_CAP` (default 10).
 4. Run `setupCheck`, then Deploy > Web app (Execute as: Me, Who has access: Anyone).
-5. In the app: ⚙️ Settings > Claude plan check > paste the `/exec` URL and passcode, then use Costs > Check my plan.
+5. In the app: ⚙️ Settings > Claude plan check > paste the `/exec` URL and passcode, then use Cost > Check my plan.
 
 The backend records spend per month using the prices in `CFG` (edit them if Anthropic's prices change).
 
