@@ -1,31 +1,17 @@
 {
   "name": "Trip Desk",
   "short_name": "Trip Desk",
+  "description": "Plan a trip in a minute: route, day-by-day plan, weather and costs.",
+  "id": "/trip-desk/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#FFF3EA",
-  "theme_color": "#C2410C",
+  "orientation": "portrait",
+  "background_color": "#F5EFE4",
+  "theme_color": "#0F766E",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "id": "/trip-desk/",
-  "description": "Personal trip planner"
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
