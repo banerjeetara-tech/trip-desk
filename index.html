@@ -2377,7 +2377,7 @@ function viewSettings() {
     h('div', { class: 'card' }, h('h2', {}, 'My defaults'),
       h('label', { for: 'home' }, 'Home city'), home, h('div', { class: 'mu xs' }, [st.home.name, st.home.country].filter(Boolean).join(', ')),
       h('label', { for: 'pp' }, 'Passport country'), h('input', { id: 'pp', class: 'inp', value: st.passport, onchange: (e) => set((s) => { s.settings.passport = e.target.value.trim() || 'India'; }) })),
-    h('div', { class: 'card' }, h('h2', {}, 'Claude plan check'), h('div', { class: 'mu sm' }, 'Optional. Only used when you tap "Check my plan" on the Trip tab.'),
+    h('div', { class: 'card' }, h('h2', {}, 'Claude plan check'), h('div', { class: 'mu sm' }, 'Optional. Only used when you tap "Check my plan" on the Cost tab.'),
       h('label', { for: 'be' }, 'Apps Script web app URL'), h('input', { id: 'be', class: 'inp', value: st.backend, placeholder: 'https://script.google.com/macros/s/…/exec', onchange: (e) => set((s) => { s.settings.backend = e.target.value.trim(); }) }),
       h('label', { for: 'pc' }, 'Passcode'), h('input', { id: 'pc', class: 'inp', type: 'password', value: st.passcode, autocomplete: 'off', onchange: (e) => set((s) => { s.settings.passcode = e.target.value; }) }),
       h('button', { type: 'button', class: 'btn2', onclick: pingBackend }, 'Test connection'), meterBox()),
