@@ -15,8 +15,8 @@ const CFG = {
   API_URL: 'https://api.anthropic.com/v1/messages',
   VERSION: '2023-06-01',
   SEARCH_TOOL: 'web_search_20260318',
-  MAX_SEARCHES: { overview: 4, visa: 4, food: 3, itinerary: 4, routes: 5, local: 4, verify: 8 },
-  MAX_TOKENS: { overview: 2500, visa: 2500, food: 2500, itinerary: 5000, routes: 4500, local: 3500, verify: 5000 },
+  MAX_SEARCHES: { overview: 4, visa: 4, food: 3, itinerary: 4, routes: 5, local: 4, verify: 8, packages: 5 },
+  MAX_TOKENS: { overview: 2500, visa: 2500, food: 2500, itinerary: 5000, routes: 4500, local: 3500, verify: 5000, packages: 4000 },
   CACHE_HOURS: 6,
   // Prices in US dollars, used only for the cost meter. Check console.anthropic.com and edit if they change.
   PRICE_IN_PER_MTOK: 2.0,
@@ -50,6 +50,8 @@ function doPost(e) {
         return json_({ ok: true, service: 'Trip Desk', step: 2, usageToday: usageToday_(), meter: meter_() });
       case 'verify':
         return json_({ ok: true, result: verifyPlan_(body) });
+      case 'packages':
+        return json_({ ok: true, result: findPackages_(body) });
       case 'section':
         return json_({ ok: true, result: buildSection_(body) });
       default:
@@ -205,6 +207,29 @@ function verifyPlan_(b) {
     data: extractJson_(r.text), sources: r.sources.slice(0, 12), searches: r.searches,
     usage: r.usage, usd: r.usd, meter: meter_(), generatedAt: new Date().toISOString()
   };
+}
+
+/* ---------- real tour packages for a destination (MakeMyTrip, Thrillophilia, tourism boards…) ---------- */
+
+function findPackages_(b) {
+  const dest = String(b.dest || '').trim().slice(0, 80);
+  if (!dest) throw new Error('Please give a destination.');
+  const nights = Math.min(30, Math.max(1, Number(b.nights) || 5));
+  const from = String(b.home || 'India').slice(0, 60);
+  const key = 'packages|' + dest.toLowerCase() + '|' + nights + '|' + from.toLowerCase();
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(key);
+  if (hit) return Object.assign(JSON.parse(hit), { cached: true, usd: 0, meter: meter_() });
+  guard_();
+  const prompt = 'Find 4 to 6 current tour packages or published day-by-day itineraries for "' + dest + '", about ' + nights + ' nights, for travellers from ' + from + '. ' +
+    'Prefer MakeMyTrip, Thrillophilia, Yatra, TripAdvisor, state tourism boards and well-known travel blogs. Use only real pages you found; give each page URL.\n' +
+    'Return JSON: {"packages":[{"name":"string","source":"site name","url":"string","nights":number,"priceInr":number or null,"priceNote":"per person or total, or null",' +
+    '"route":[{"place":"town name only","nights":number}],"highlights":["short string"]}],"notes":"string or null"}';
+  const r = callClaude_(SYSTEM_PROMPT, prompt, 'packages');
+  const out = { data: extractJson_(r.text), sources: r.sources.slice(0, 12), searches: r.searches, usage: r.usage, usd: r.usd, generatedAt: new Date().toISOString() };
+  const str = JSON.stringify(out);
+  if (str.length < 95000) cache.put(key, str, CFG.CACHE_HOURS * 3600);
+  return Object.assign(out, { meter: meter_() });
 }
 
 function addSpend_(usd) {

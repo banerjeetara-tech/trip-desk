@@ -6,15 +6,16 @@ Claude is used only when you tap **Check my plan**, through your own Apps Script
 ## Tabs
 | Tab | What it does |
 |---|---|
-| 🧭 Plan | Type places in order ("Varanasi then Ayodhya") or a region ("Kerala"). Set days, people and start date. The tour plan is prepared automatically. Switch between tour options, add or remove places, reorder, and see saved plans. |
-| 🚆 Travel | Choose Train, Bus, Sedan, SUV, Taxi or Flight for each leg. Each leg keeps its own choice. A total for the head count appears at the end, with the cheapest possible total for comparison. |
-| 📍 Places | What to see in each place, with ＋ Add to plan, ★ Must see and ✗ Skip. Changes update the Plan tab. Main places nearby, a map, and recent vlogs sorted newest first. |
-| 🏨 Stay | Hotels (Budget, Mid-range, Luxury), Food, Itinerary and Tickets. |
-| ⛅ Weather | Weather for your trip dates, the best time to go and a packing list. |
+| 🧭 Plan | Type a main location (a state, region or city). Tick the places around it you want, add your own, set the start date, days and people, and tap Make my plan: the best order and nights for your days. Below: ready-made itineraries from the travel guide (＋ Add to my trip), links to MakeMyTrip, Thrillophilia, TripAdvisor and Yatra packages, and "Find real packages with Claude". Then your trip, the tour plan and saved plans. |
+| 🚆 Travel | Train, Bus, Sedan, SUV, Taxi or Flight for each leg, with every booking link (IRCTC, ixigo, redBus, Savaari, Google Flights, MakeMyTrip and more). Total for the group and the cheapest possible total. |
+| 📍 Places | The complete day-wise plan with a map for each day, and every place to see with ＋ Add to my trip, ★ Must see and ✗ Skip; changes update every tab. Main places nearby and the latest vlogs, newest first. |
+| 🏨 Stay | Choose Best, Mid-range or Low budget: hotels, food and travel tickets of that level, with maps and booking links. Tickets to book. |
+| ⛅ Weather | Weather for each day of your trip dates, the best time to go and a packing list. |
 | 💰 Cost | Summary, Expenses, Documents and Visa. Also the optional Claude plan check. |
 
-Light and dark themes in teal and sand (⚙️ Settings → Appearance, or follow the phone). The app checks for a new
-version each time it opens and reloads itself once when one arrives.
+Dark, photo-first look. The app checks for a new version each time it opens and reloads itself once when one arrives.
+
+**After updating:** paste the new `backend/Code.gs` into Apps Script and make a new version (step 10 below) to use "Find real packages with Claude".
 
 ## Files
 - `index.html`: the app (GitHub Pages serves it at `https://banerjeetara-tech.github.io/trip-desk/`)
