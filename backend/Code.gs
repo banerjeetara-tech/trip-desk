@@ -7,7 +7,7 @@
  * Script Properties to set (Project Settings > Script properties):
  *   ANTHROPIC_API_KEY  your key from console.anthropic.com
  *   APP_PASSCODE       a passcode you choose; the app must send it
- *   DAILY_CAP          optional, max Claude calls per day (default 80)
+ *   DAILY_CAP          optional, max Claude calls per day (default 10)
  */
 
 const CFG = {
