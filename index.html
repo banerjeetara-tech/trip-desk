@@ -1538,11 +1538,13 @@ function extrasCard(s) {
     h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => changeNights(s.key, 1) }, '＋ A night in ' + place), h('button', { type: 'button', class: 'btn2', onclick: () => openPlace(s.key) }, 'All sights in ' + place))]);
 }
 function mapLink(name, place) { return 'https://www.google.com/maps/search/?api=1&query=' + enc(name + ', ' + place); }
+function okPoint(lat, lon) { return Number.isFinite(Number(lat)) && Number.isFinite(Number(lon)) && lat !== '' && lon !== '' && lat !== null && lon !== null && Math.abs(Number(lat)) <= 90 && Math.abs(Number(lon)) <= 180; }
 function mapBox(s, sights) {
-  const pts = sights.map((x, idx) => x.lat != null ? { lat: x.lat, lon: x.lon, label: (idx + 1) + '. ' + x.name } : null).filter(Boolean);
-  if (!s.geo && !pts.length) return null;
+  const pts = sights.map((x, idx) => okPoint(x.lat, x.lon) ? { lat: Number(x.lat), lon: Number(x.lon), label: (idx + 1) + '. ' + x.name } : null).filter(Boolean);
+  const geoOk = s.geo && okPoint(s.geo.lat, s.geo.lng);
+  if (!geoOk && !pts.length) return null;
   const id = 'map-' + s.key.replace(/[^a-z0-9]/gi, '');
-  mem.maps.push({ id, center: s.geo ? [s.geo.lat, s.geo.lng] : [pts[0].lat, pts[0].lon], name: shortName(s), pts });
+  mem.maps.push({ id, center: geoOk ? [Number(s.geo.lat), Number(s.geo.lng)] : [pts[0].lat, pts[0].lon], name: shortName(s), pts });
   return h('div', {}, h('div', { id, class: 'map', role: 'img', 'aria-label': 'Map of ' + shortName(s) + ' with ' + pts.length + ' sights' }),
     h('div', { class: 'mu xs', style: 'margin-top:4px' }, (pts.length ? pts.length + ' numbered sights on the map. ' : '') + 'Map © OpenStreetMap.'));
 }
@@ -1557,10 +1559,11 @@ function initMaps() {
   list.forEach((m) => {
     const el = document.getElementById(m.id);
     if (!el || el._leaflet_id) return;
+    if (!okPoint(m.center[0], m.center[1])) return;
     const map = L.map(el, { scrollWheelZoom: false }).setView(m.center, 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
     const b = [m.center];
-    m.pts.forEach((p) => { L.circleMarker([p.lat, p.lon], { radius: 7, color: ac, fillOpacity: 0.85 }).addTo(map).bindPopup(p.label); b.push([p.lat, p.lon]); });
+    m.pts.forEach((p) => { if (!okPoint(p.lat, p.lon)) return; L.circleMarker([p.lat, p.lon], { radius: 7, color: ac, fillOpacity: 0.85 }).addTo(map).bindPopup(p.label); b.push([p.lat, p.lon]); });
     if (!m.pts.length && m.name) L.marker(m.center).addTo(map).bindPopup(m.name);
     if (b.length > 1) map.fitBounds(b.slice(1), { padding: [24, 24], maxZoom: 14 });
   });
@@ -1756,9 +1759,48 @@ const TILE_TONES = ['t1', 't2', 't3', 't4', 't5', 't6'];
 function bgUrl(src) { return src ? 'background-image:url("' + String(src).replace(/["\\]/g, '') + '")' : ''; }
 /* "Varanasi then Ayodhya", "Varanasi, Ayodhya", "Varanasi → Ayodhya": several places, in that order */
 function splitPlaces(text) { return String(text || '').split(/\s*(?:,|;|→|->|>|\+|&|\bthen\b|\band\b|\bvia\b|\bto\b)\s*/i).map((x) => x.trim()).filter(Boolean); }
+/* spelling-tolerant edit distance, for typed place names */
+function editDist(a, b) {
+  const m = a.length, n = b.length; let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function titleCase(s) { return String(s || '').trim().replace(/\s+/g, ' ').replace(/\b([a-z])/g, (c) => c.toUpperCase()); }
+/* "ayodhyay" -> "Ayodhya", "varanasi" -> "Varanasi". Uses the same search as the suggestions; keeps what was typed if nothing close is found. */
+async function resolvePlaceName(text) {
+  const t = String(text || '').trim();
+  if (!t) return t;
+  const nt = norm(t);
+  // 1) an exact page or an old name that redirects to one (Alleppey -> Alappuzha, Calcutta -> Kolkata)
+  try {
+    const j = await getJSON('https://en.wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&redirects=1&prop=coordinates&action=query&titles=' + enc(t), 6000);
+    const pg = j && j.query && j.query.pages && j.query.pages[0];
+    if (pg && !pg.missing && pg.title && pg.coordinates && pg.coordinates.length) return pg.title.replace(/\s*\(.*\)$/, '');
+  } catch (e) {}
+  // 2) a close spelling from the fuzzy search (ayodhyay -> Ayodhya, Dehli -> Delhi)
+  try {
+    const list = await placeSuggestions(t);
+    const hit = list.find((it) => norm(it.name) === nt) || list.find((it) => editDist(norm(it.name), nt) <= Math.max(2, Math.floor(nt.length / 3)));
+    if (hit) return hit.name;
+  } catch (e) {}
+  return titleCase(t);
+}
+async function resolveNames(parts) {
+  const out = [];
+  for (const p of parts) {
+    const n = await resolvePlaceName(p);
+    if (n && !out.some((x) => norm(x) === norm(n))) out.push(n);
+  }
+  return out;
+}
 async function loadMain(text) {
-  const parts = splitPlaces(text);
-  if (!parts.length) return;
+  const typed = splitPlaces(text);
+  if (!typed.length) return;
+  const parts = await resolveNames(typed);
   const name = parts[0], w = pk();
   w.q = String(text).trim(); w.main = name; w.extra = parts.slice(1); w.picks = []; w.keepOrder = parts.length > 1;
   if (SUG.wiz) { SUG.wiz.items = []; SUG.wiz.q = ''; }
@@ -1820,7 +1862,10 @@ function togglePick(name) {
 async function makePlan(list, label) {
   const w = pk(), ws = wst();
   const fixed = Array.isArray(list) && list.length && list.every((x) => x.nights > 0);
-  const names = (Array.isArray(list) ? list : w.picks.map((n) => ({ name: n }))).filter((x) => x && x.name).slice(0, 7);
+  let names = (Array.isArray(list) ? list : w.picks.map((n) => ({ name: n }))).filter((x) => x && x.name).slice(0, 7);
+  // your home city is where the trip starts and ends, so it is not a stop too
+  const homeName = S.settings.home && S.settings.home.name;
+  if (homeName && names.length > 1 && names.some((x) => norm(x.name) === norm(homeName))) names = names.filter((x) => norm(x.name) !== norm(homeName));
   if (!names.length) { toast('Tick at least one place first.'); return; }
   ws.loading = true; ws.err = ''; ws.step = 'Finding ' + names.map((x) => x.name).join(', ') + ' on the map…'; render();
   try {
@@ -1921,12 +1966,14 @@ function pickCard() {
     ws.err ? h('div', { class: 'warnbox sm' }, ws.err) : null,
     h('div', { class: 'mu xs' }, 'The plan uses your ' + ((w.nights || 6) + 1) + ' days: places in the order with the least travel, nights shared by how much there is to see.'));
 }
-function addExtraPick(text) {
-  const names = splitPlaces(text);
-  if (!names.length) return;
+async function addExtraPick(text) {
+  const typed = splitPlaces(text);
+  if (!typed.length) return;
   const w = pk();
   if (SUG.pickadd) { SUG.pickadd.items = []; SUG.pickadd.q = ''; }
+  const names = await resolveNames(typed);
   names.forEach((name) => {
+    if (norm(name) === norm(w.main)) return;
     if (!w.extra.some((x) => norm(x) === norm(name))) w.extra.push(name);
     if (!w.picks.some((x) => norm(x) === norm(name))) w.picks.push(name);
   });
