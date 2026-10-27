@@ -238,6 +238,48 @@ function addDays(s, n) { const d = parseIso(s); d.setDate(d.getDate() + n); retu
 function todayIso() { return isoOf(new Date()); }
 function nice(s, opt) { return parseIso(s).toLocaleDateString('en-GB', opt || { weekday: 'short', day: 'numeric', month: 'short' }); }
 function fmt(n) { return Math.round(n || 0).toLocaleString('en-IN'); }
+/* money: every amount is worked out in rupees, then shown in the currency chosen in Settings */
+const MONEY_OPTS = [['INR', '₹ Indian rupee'], ['LOCAL', 'Local: each place\'s own money'], ['USD', '$ US dollar'], ['GBP', '£ British pound'], ['EUR', '€ Euro'], ['THB', '฿ Thai baht'], ['AED', 'AED UAE dirham'], ['SGD', 'S$ Singapore dollar'], ['AUD', 'A$ Australian dollar'], ['LKR', 'LKR Sri Lankan rupee'], ['NPR', 'NPR Nepali rupee'], ['IDR', 'Rp Indonesian rupiah'], ['MYR', 'RM Malaysian ringgit'], ['JPY', '¥ Japanese yen'], ['VND', '₫ Vietnamese dong']];
+function localCodeFor(cc) {
+  if (!cc) return null;
+  if (cc === 'IN') return 'INR';
+  for (const k of Object.keys(R || {})) { const r = R[k]; if (r && r.geo && r.geo.cc === cc && r.cur && r.cur.code) return r.cur.code; }
+  return null;
+}
+/* the country and money of one stop, for showing its prices */
+function stopCur(key) {
+  const s = S.trip.stops.find((x) => x.key === key), r = (R && R[key]) || {};
+  return { cc: s && s.geo ? s.geo.cc : null, code: r.cur && r.cur.code ? r.cur.code : null };
+}
+function moneyTarget(cc, localCode) {
+  const c = (S.settings && S.settings.cur) || 'INR';
+  if (c !== 'LOCAL') return c;
+  return localCode || localCodeFor(cc) || 'INR';
+}
+function fmtMoney(code, value) {
+  if (code === 'INR') return '₹' + fmt(value);
+  try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: code, maximumFractionDigits: Math.abs(value) >= 100 ? 0 : 2 }).format(value); }
+  catch (e) { return code + ' ' + fmt(value); }
+}
+/* an amount worked out in rupees, shown in the chosen currency */
+function showInr(inr, cc, localCode) {
+  if (inr == null || !isFinite(inr)) return '—';
+  const code = moneyTarget(cc, localCode);
+  const r = RATES && RATES.rates && RATES.rates[code];
+  if (code === 'INR' || !r) return fmtMoney('INR', inr);
+  return fmtMoney(code, inr * r);
+}
+/* a price written in a guide, e.g. "€30" or "฿1,500": shown as written, plus the chosen currency when it differs */
+function showPrice(raw, cc, localCode) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const f = faresIn(text, localCode || localCodeFor(cc))[0];
+  if (!f || !f.code) return text;
+  if (f.code === moneyTarget(cc, localCode)) return text;
+  const lo = toInr(f.code, f.a);
+  if (lo == null || !RATES) return text;
+  return text + ' ≈ ' + showInr(lo, cc, localCode);
+}
 function fmtH(h) { const m = Math.round(h * 60); return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm'; }
 function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 function keyOf(name) { return norm(name); }
@@ -249,7 +291,7 @@ const DEFAULTS = {
   tab: 'plan', back: 'plan', dsub: 'plan', csub: 'sum', pstop: 0, banner: '',
   settings: {
     theme: 'auto', home: { name: 'Kolkata', lat: 22.5726, lng: 88.3639, cc: 'IN', country: 'India' }, passport: 'India',
-    food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid',
+    food: 'both', budget: 'comfort', cap: 200000, wtemp: 'warm', wrain: 'mid', cur: 'INR', conv: { a: '1000', from: 'INR', to: 'USD' },
     proxy: 'https://youtubenews.banerjee-tara.workers.dev/?url=', backend: '', passcode: ''
   },
   trip: { name: '', stops: [], start: addDays(todayIso(), 45), travellers: 2, free: false, legModes: {}, swaps: {}, over: {}, seed: 1, extra: {}, skip: {}, must: {}, startAt: null, endMode: 'home', endAt: null, target: null, lock: false },
@@ -445,14 +487,19 @@ function listItems(d, max) {
     const first = li.firstElementChild;
     let name = nEl ? txt(nEl) : (first && /^(A|STRONG|SPAN)$/.test(first.tagName) && t.startsWith(txt(first)) ? txt(first) : '');
     if (!name || name.length > 80) name = t.split(/[.:—–(]/)[0].slice(0, 70).trim();
+    // a fare at the start ("€30 for the Acropolis") is the price, not part of the name
+    const lead = name.match(/^((?:US\$|S\$|Rs\.?\s?|INR\s?|THB\s?|USD\s?|EUR\s?|GBP\s?|[€£$¥฿₹])\s?\d[\d,.]*(?:\s?(?:-|–|to)\s?\d[\d,.]*)?)\s*(?:for|at|per|—|–|-|:)?\s*/i);
+    let leadFare = '';
+    if (lead) { leadFare = lead[1]; name = name.slice(lead[0].length).trim().replace(/^the\s+/i, '') || name; }
     const k = norm(name);
     if (!k || seen.has(k)) return;
     seen.add(k);
     const pEl = li.querySelector('.listing-price');
+    const priceText = pEl ? txt(pEl) : leadFare;
     let body = t.startsWith(name) ? t.slice(name.length).replace(/^[\s,.:;—–-]+/, '') : t;
     if (!body) body = t;
     const lat = parseFloat(li.getAttribute('data-plat')), lon = parseFloat(li.getAttribute('data-plon'));
-    out.push(Object.assign({ name, text: body.slice(0, 340), price: pEl ? txt(pEl) : '' }, isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 ? { lat, lon } : {}));
+    out.push(Object.assign({ name, text: body.slice(0, 340), price: priceText }, isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 ? { lat, lon } : {}));
   });
   return out.slice(0, max || 14);
 }
@@ -538,9 +585,9 @@ function toInr(code, amt) {
   return r ? amt / r : null;
 }
 function fareLabel(f) {
-  const lo = toInr(f.code, f.a), hi = f.b != null ? toInr(f.code, f.b) : null;
-  if (lo == null || f.code === 'INR') return f.raw;
-  return f.raw + ' (about ₹' + fmt(lo) + (hi != null ? ' to ₹' + fmt(hi) : '') + ')';
+  const lo = toInr(f.code, f.a);
+  if (lo == null || f.code === moneyTarget(null)) return f.raw;
+  return f.raw + ' ≈ ' + showInr(lo);
 }
 
 function districtLinks(d, title) {
@@ -895,8 +942,8 @@ function trainVsCar(l) {
   const n = S.trip.travellers, d = car.total - tr.total;
   return h('div', { class: 'note' },
     h('b', {}, word + ' vs ' + car.label.toLowerCase() + ' for ' + n + (n === 1 ? ' person: ' : ' people: ')),
-    ico + ' ₹' + fmt(tr.total) + ' (' + fmtH(tr.hrs) + ') vs 🚗 ₹' + fmt(car.total) + ' (' + fmtH(car.hrs) + '). ',
-    d > 0 ? 'The car costs ₹' + fmt(d) + ' more but is door to door and you can stop on the way.' : 'The car is ₹' + fmt(-d) + ' cheaper for your group, and door to door.');
+    ico + ' ' + showInr(tr.total) + ' (' + fmtH(tr.hrs) + ') vs 🚗 ' + showInr(car.total) + ' (' + fmtH(car.hrs) + '). ',
+    d > 0 ? 'The car costs ' + showInr(d) + ' more but is door to door and you can stop on the way.' : 'The car is ' + showInr(-d) + ' cheaper for your group, and door to door.');
 }
 function legLinks(l) {
   const A = l.a.name, B = l.b.name, gq = (t) => 'https://www.google.com/search?q=' + enc(t);
@@ -996,7 +1043,7 @@ function viewCompare() {
       h('div', { class: 'row between' }, h('h2', {}, v.name), h('div', { class: 'row', style: 'gap:6px' }, v.total === cheapest ? chip('Cheapest') : null, v.travelH === quickest ? chip('Least travel', 'plain') : null)),
       h('div', { class: 'mu sm' }, v.note),
       h('div', { class: 'grid2' },
-        statBox('Total', '₹' + fmt(v.total)), statBox('Nights', String(v.nights)),
+        statBox('Total', showInr(v.total)), statBox('Nights', String(v.nights)),
         statBox('Travel time', fmtH(v.travelH)), statBox('Distance', v.km ? fmt(v.km) + ' km' : '–')),
       h('div', { class: 'sm' }, h('b', {}, 'Route: '), v.route),
       h('div', { class: 'sm' }, h('b', {}, 'Getting there: '), v.modes || '–'),
@@ -1428,7 +1475,7 @@ async function pingBackend() {
   save(); render();
 }
 function usdToInr(usd) { const r = RATES && RATES.rates && RATES.rates.USD; return r ? usd / r : null; }
-function money(usd) { const inr = usdToInr(usd); return '$' + usd.toFixed(usd < 1 ? 3 : 2) + (inr != null ? ' (about ₹' + fmt(inr) + ')' : ''); }
+function money(usd) { const inr = usdToInr(usd); return '$' + usd.toFixed(usd < 1 ? 3 : 2) + (inr != null ? ' (about ' + showInr(inr) + ')' : ''); }
 
 /* ============================================================
    Rendering: six tabs (Plan · Travel · Places · Stay · Weather · Cost), plus Settings and Compare
@@ -1545,7 +1592,7 @@ function itemRow(it, di, d) {
     h('div', { class: 'itime' }, label),
     h('div', { class: 'grow col', style: 'gap:2px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, it.title),
-        it.price ? h('span', { class: 'sm b nowrap' }, '₹' + fmt(it.price)) : it.cost ? h('span', { class: 'xs mu nowrap' }, it.cost.slice(0, 24)) : null),
+        it.price ? h('span', { class: 'sm b nowrap' }, showInr(it.price, stopCur(it.stopKey).cc, stopCur(it.stopKey).code)) : it.cost ? h('span', { class: 'xs mu nowrap' }, showPrice(it.cost, stopCur(it.stopKey).cc, stopCur(it.stopKey).code).slice(0, 40)) : null),
       it.text ? h('div', { class: 'sm mu clamp' }, it.text) : null,
       acts.length ? h('div', { class: 'acts' }, acts) : null));
 }
@@ -1625,20 +1672,20 @@ function budgetView() {
   const parts = [['Travel between places', c.transit, '#F2C46D'], ['Stay', c.stay, '#7FB7A4'], ['Food', c.food, '#E58A6E'], ['Local transport', c.local, '#8FA8D6'], ['Sights and tickets', c.act, '#C49BDB'], ['Visa', c.visa, '#9A9AA2']].filter((p) => p[1] > 0);
   out.push(h('section', { class: 'card' },
     h('div', { class: 'mu sm' }, (n + 1) + ' days · ' + peopleWord(trav) + ' · ' + tierName() + ' level'),
-    h('div', { class: 'row between', style: 'align-items:baseline' }, h('div', { class: 'total' }, '₹' + fmt(c.total)), h('div', { class: 'mu sm' }, '₹' + fmt(c.total / trav) + ' each')),
+    h('div', { class: 'row between', style: 'align-items:baseline' }, h('div', { class: 'total' }, showInr(c.total)), h('div', { class: 'mu sm' }, showInr(c.total / trav) + ' each')),
     h('div', { class: 'stack', role: 'img', 'aria-label': 'Cost split' }, parts.map((p) => h('span', { style: 'flex:' + p[1] + ';background:' + p[2], title: p[0] }))),
-    parts.map((p) => h('div', { class: 'kv' }, h('span', { class: 'row', style: 'gap:8px' }, h('span', { class: 'sw', style: 'background:' + p[2] }), p[0]), h('span', {}, '₹' + fmt(p[1])))),
+    parts.map((p) => h('div', { class: 'kv' }, h('span', { class: 'row', style: 'gap:8px' }, h('span', { class: 'sw', style: 'background:' + p[2] }), p[0]), h('span', {}, showInr(p[1])))),
     segs(TIERS.map((t) => [t[0], t[1]]), S.settings.budget, (v) => set((s) => { s.settings.budget = v; })),
     h('div', { class: 'mu xs' }, 'Estimates, not quotes. Travel uses distance; stay and food use your style. Type real prices below as you find them.')));
   const gap = S.settings.cap - c.total, over = gap < 0;
-  out.push(h('section', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'My limit'), chip(over ? 'Over by ₹' + fmt(-gap) : '₹' + fmt(gap) + ' to spare', over ? 'warn' : '')),
+  out.push(h('section', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, 'My limit'), chip(over ? 'Over by ' + showInr(-gap) : showInr(gap) + ' to spare', over ? 'warn' : '')),
     h('div', { class: 'bar' }, h('div', { class: over ? 'over' : '', style: 'width:' + clamp(Math.round(c.total / S.settings.cap * 100), 0, 100) + '%' })),
-    h('div', { class: 'row between' }, h('span', { class: 'mu sm' }, 'Limit'), stepper('limit', '₹' + fmt(S.settings.cap), () => set((s) => { s.settings.cap = Math.max(10000, s.settings.cap - 10000); }), () => set((s) => { s.settings.cap += 10000; }))),
+    h('div', { class: 'row between' }, h('span', { class: 'mu sm' }, 'Limit'), stepper('limit', showInr(S.settings.cap), () => set((s) => { s.settings.cap = Math.max(10000, s.settings.cap - 10000); }), () => set((s) => { s.settings.cap += 10000; }))),
     over ? h('div', { class: 'sm' }, 'To save: train or bus instead of flights, the Budget style, or a night fewer somewhere.') : null));
   const L = legs();
-  if (L.length) out.push(fold('travelcost', 'Travel between places', '₹' + fmt(c.transit) + ' · change legs on the Travel tab', () => [
-    L.map((l) => h('div', { class: 'kv sm' }, h('span', {}, (MODE_ICON[l.sel.m] || '') + ' ' + l.a.name + ' → ' + l.b.name), h('span', {}, '₹' + fmt(l.sel.total)))),
-    L.reduce((a, l) => a + l.sel.total, 0) > L.reduce((a, l) => a + l.cheap, 0) ? h('div', { class: 'mu xs' }, 'Cheapest possible on these legs: ₹' + fmt(L.reduce((a, l) => a + l.cheap, 0)) + '.') : null,
+  if (L.length) out.push(fold('travelcost', 'Travel between places', showInr(c.transit) + ' · change legs on the Travel tab', () => [
+    L.map((l) => h('div', { class: 'kv sm' }, h('span', {}, (MODE_ICON[l.sel.m] || '') + ' ' + l.a.name + ' → ' + l.b.name), h('span', {}, showInr(l.sel.total)))),
+    L.reduce((a, l) => a + l.sel.total, 0) > L.reduce((a, l) => a + l.cheap, 0) ? h('div', { class: 'mu xs' }, 'Cheapest possible on these legs: ' + showInr(L.reduce((a, l) => a + l.cheap, 0)) + '.') : null,
     wholeTripModes()]));
   out.push(fold('edit', 'Use my own prices', 'Hotel per night and food per day, per place', () => [
     S.trip.stops.map((s) => { const r = stopRates(s); return h('div', { class: 'line col' }, h('div', { class: 'b' }, shortName(s)),
@@ -1662,8 +1709,8 @@ function wholeTripModes() {
   const car = L.reduce((a, l) => a + (road.includes(l) ? l.opts.find((o) => o.m === 'car') : l.sel).total, 0);
   const apply = (m) => set((s) => { road.forEach((l) => { s.trip.legModes[l.key] = m === 'car' ? 'car' : pub(l).m; }); s.banner = 'Road legs now by ' + (m === 'car' ? 'private car' : 'train or bus') + '.'; });
   return h('div', { class: 'line col' }, h('h3', {}, 'Train or private car?'),
-    h('div', { class: 'grid2' }, statBox('🚆 Train or bus', '₹' + fmt(train)), statBox('🚗 Car with driver', '₹' + fmt(car))),
-    h('div', { class: 'sm' }, car > train ? 'The car costs ₹' + fmt(car - train) + ' more, but goes door to door and stops where you like.' : 'The car is ₹' + fmt(train - car) + ' cheaper for your group, and door to door.'),
+    h('div', { class: 'grid2' }, statBox('🚆 Train or bus', showInr(train)), statBox('🚗 Car with driver', showInr(car))),
+    h('div', { class: 'sm' }, car > train ? 'The car costs ' + showInr(car - train) + ' more, but goes door to door and stops where you like.' : 'The car is ' + showInr(train - car) + ' cheaper for your group, and door to door.'),
     h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => apply('train') }, 'Use train or bus'), h('button', { type: 'button', class: 'btn2', onclick: () => apply('car') }, 'Use private car')));
 }
 function currencyBody(curs) {
@@ -1712,19 +1759,19 @@ function expensesView() {
   const dv = net.map((v, i) => ({ i, v: -v })).filter((x) => x.v > 0.5).sort((a, b) => b.v - a.v);
   const cv = net.map((v, i) => ({ i, v })).filter((x) => x.v > 0.5).sort((a, b) => b.v - a.v);
   const settle = []; let a = 0, b = 0;
-  while (a < dv.length && b < cv.length) { const m = Math.min(dv[a].v, cv[b].v); settle.push(S.people[dv[a].i] + ' pays ' + S.people[cv[b].i] + ' ₹' + fmt(m)); dv[a].v -= m; cv[b].v -= m; if (dv[a].v < 0.5) a++; if (cv[b].v < 0.5) b++; }
+  while (a < dv.length && b < cv.length) { const m = Math.min(dv[a].v, cv[b].v); settle.push(S.people[dv[a].i] + ' pays ' + S.people[cv[b].i] + ' ' + showInr(m)); dv[a].v -= m; cv[b].v -= m; if (dv[a].v < 0.5) a++; if (cv[b].v < 0.5) b++; }
   const desc = h('input', { id: 'edesc', class: 'inp', type: 'text', placeholder: 'Dinner, taxi, tickets…' });
   const amt = h('input', { id: 'eamt', class: 'inp', inputmode: 'decimal', placeholder: '0' });
   const person = h('input', { id: 'eperson', class: 'inp', type: 'text', placeholder: 'Name' });
   const payer = clamp(S.payer || 0, 0, Math.max(0, n - 1));
   return [
-    h('section', { class: 'card' }, h('div', { class: 'mu sm' }, 'Spent so far'), h('div', { class: 'total' }, '₹' + fmt(spent)), h('div', { class: 'mu sm' }, 'Each person\'s share: ₹' + fmt(share)),
-      S.people.map((p, i) => h('div', { class: 'kv' }, h('span', {}, h('b', {}, p), h('br'), h('span', { class: 'mu xs' }, 'Paid ₹' + fmt(paid[i]))), h('span', {}, chip(Math.abs(net[i]) < 1 ? 'Settled' : net[i] > 0 ? 'Gets back ₹' + fmt(net[i]) : 'Owes ₹' + fmt(-net[i]), net[i] < -0.5 ? 'warn' : '')))),
+    h('section', { class: 'card' }, h('div', { class: 'mu sm' }, 'Spent so far'), h('div', { class: 'total' }, showInr(spent)), h('div', { class: 'mu sm' }, 'Each person\'s share: ' + showInr(share)),
+      S.people.map((p, i) => h('div', { class: 'kv' }, h('span', {}, h('b', {}, p), h('br'), h('span', { class: 'mu xs' }, 'Paid ' + showInr(paid[i]))), h('span', {}, chip(Math.abs(net[i]) < 1 ? 'Settled' : net[i] > 0 ? 'Gets back ' + showInr(net[i]) : 'Owes ' + showInr(-net[i]), net[i] < -0.5 ? 'warn' : '')))),
       h('div', { class: 'stat' }, h('div', { class: 'mu xs' }, 'To settle up'), (settle.length ? settle : ['Everyone is settled up.']).map((t) => h('div', { class: 'b' }, t)))),
     h('section', { class: 'card' }, h('h2', {}, 'Add an expense'), h('label', { for: 'edesc' }, 'What was it'), desc, h('label', { for: 'eamt' }, 'Amount in rupees'), amt,
       h('label', {}, 'Who paid'), h('div', { class: 'row wrap' }, S.people.map((p, i) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(payer === i), onclick: () => set((s) => { s.payer = i; }) }, p))),
       h('button', { type: 'button', class: 'btn', onclick: () => { const v = Number(String(amt.value).replace(/[^0-9.]/g, '')); if (!v) return toast('Type an amount first.'); set((s) => { s.expenses.push({ id: Date.now(), desc: desc.value.trim() || 'Expense', amt: v, by: payer }); }); } }, 'Add and split equally')),
-    S.expenses.length ? h('section', { class: 'card' }, S.expenses.map((e) => h('div', { class: 'row line' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, e.desc), h('div', { class: 'mu xs' }, 'Paid by ' + (S.people[e.by] || '?'))), h('div', { class: 'b' }, '₹' + fmt(e.amt)),
+    S.expenses.length ? h('section', { class: 'card' }, S.expenses.map((e) => h('div', { class: 'row line' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, e.desc), h('div', { class: 'mu xs' }, 'Paid by ' + (S.people[e.by] || '?'))), h('div', { class: 'b' }, showInr(e.amt)),
       iconBtn('x', 'Delete expense', false, () => set((s) => { s.expenses = s.expenses.filter((x) => x.id !== e.id); }))))) : null,
     h('section', { class: 'card' }, h('h2', {}, 'Who is splitting'),
       h('div', { class: 'row wrap', style: 'gap:6px' }, S.people.map((p, i) => h('button', { type: 'button', class: 'pill', 'aria-label': 'Remove ' + p, disabled: S.expenses.some((e) => e.by === i) || n <= 1 ? true : null, onclick: () => set((s) => { s.people.splice(i, 1); s.expenses.forEach((e) => { if (e.by > i) e.by--; }); s.payer = 0; }) }, p + ' ×'))),
@@ -1946,7 +1993,7 @@ function planCover() {
     h('div', { class: 'kicker', style: 'color:#fff;opacity:.85' }, nice(S.trip.start, { day: 'numeric', month: 'short' }) + ' – ' + nice(addDays(S.trip.start, n), { day: 'numeric', month: 'short', year: 'numeric' })),
     h('div', { class: 'big' }, w.main && v ? v.title.split('/')[0] : shortName(st[0])),
     h('div', { class: 'lead' }, st.map(shortName).join(' → ')),
-    h('div', { class: 'hstats' }, hs(String(n + 1), 'days'), hs(String(trav), trav === 1 ? 'person' : 'people'), hs('₹' + fmt(c.total), 'estimated'), hs('₹' + fmt(c.total / trav), 'per person')),
+    h('div', { class: 'hstats' }, hs(String(n + 1), 'days'), hs(String(trav), trav === 1 ? 'person' : 'people'), hs(showInr(c.total), 'estimated'), hs(showInr(c.total / trav), 'per person')),
     researchBusy() ? h('div', { class: 'sm' }, h('span', { class: 'spin light' }), ' Preparing your plan…') : null,
     h('div', { class: 'row wrap' },
       h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { s.tab = 'places'; s.psub = 'days'; }) }, 'Day-wise plan'),
@@ -2051,7 +2098,7 @@ function readyMadeCard() {
       const route = (p.route || []).filter((x) => x && x.place);
       card.append(h('div', { class: 'pkg' }, h('div', { class: 'ph t4' }),
         h('div', { class: 'grow col', style: 'gap:4px' }, h('div', { class: 'b' }, p.name || 'Package'),
-          h('div', { class: 'mu xs' }, [p.source, p.nights ? p.nights + ' nights' : '', p.priceInr ? '₹' + fmt(p.priceInr) + (p.priceNote ? ' ' + p.priceNote : '') : ''].filter(Boolean).join(' · ')),
+          h('div', { class: 'mu xs' }, [p.source, p.nights ? p.nights + ' nights' : '', p.priceInr ? showInr(p.priceInr) + (p.priceNote ? ' ' + p.priceNote : '') : ''].filter(Boolean).join(' · ')),
           route.length ? h('div', { class: 'xs' }, route.map((x) => x.place + (x.nights ? ' ' + x.nights + 'n' : '')).join(' → ')) : null,
           (p.highlights || []).length ? h('div', { class: 'mu xs clamp' }, p.highlights.join(' · ')) : null,
           h('div', { class: 'row wrap', style: 'gap:6px' }, route.length ? h('button', { type: 'button', class: 'btn2 sm', onclick: () => makePlan(route.map((x) => ({ name: x.place, nights: Math.max(1, Math.round(x.nights || 1)) })), p.name) }, '＋ Add to my trip') : null, ext(p.url, 'Open ↗', 'link')))));
@@ -2116,7 +2163,7 @@ function legRow(l, between) {
     h('button', { type: 'button', class: 'legbtn', 'aria-label': 'Change how to travel from ' + l.a.name + ' to ' + l.b.name, onclick: () => { mem.legFocus = l.key; go('travel'); } },
       h('span', { class: 'lm', 'aria-hidden': 'true' }, MODE_ICON[l.sel.m] || '🧭'),
       h('span', { class: 'grow' }, h('span', { class: 'b sm' }, l.sel.label), h('br'), h('span', { class: 'mu xs' }, fmtH(l.sel.hrs) + ' · ' + nice(l.date, { day: 'numeric', month: 'short' }))),
-      h('span', { class: 'b sm' }, '₹' + fmt(l.sel.total)), h('span', { class: 'chev', style: 'transform:rotate(-90deg)' }, icon('down', 18))));
+      h('span', { class: 'b sm' }, showInr(l.sel.total)), h('span', { class: 'chev', style: 'transform:rotate(-90deg)' }, icon('down', 18))));
   if (between) row.append(insertBetween(between[0], between[1], between[2]));
   return row;
 }
@@ -2214,19 +2261,19 @@ function viewTravel() {
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', {}, h('div', { class: 'mu xs' }, 'Leg ' + (li + 1) + ' · ' + nice(l.date)), h('h2', {}, l.a.name + ' → ' + l.b.name)), h('span', { class: 'mu xs nowrap' }, fmt(l.road) + ' km')),
       h('div', { class: 'grid3' }, l.opts.map((o) => h('button', { type: 'button', class: 'opt v', 'aria-pressed': String(o.m === l.mode), onclick: () => set((s) => { s.trip.legModes[l.key] = o.m; }) },
         h('span', { class: 'b sm' }, (MODE_ICON[o.m] || '') + ' ' + (MODE_NAME[o.m] || o.label)),
-        h('span', { class: 'b' }, '₹' + fmt(o.total)),
-        h('span', { class: 'mu xs' }, fmtH(o.hrs) + (o.per === 'car' ? (o.cars > 1 ? ' · ' + o.cars + ' cars' : ' · per car') : ' · ₹' + fmt(o.fare) + ' each'))))),
-      h('div', { class: 'sm' }, h('b', {}, 'Chosen: '), (MODE_ICON[sel.m] || '') + ' ' + sel.label + ' · ₹' + fmt(sel.total) + ' for ' + peopleWord(trav) + ' · about ' + fmtH(sel.hrs)),
+        h('span', { class: 'b' }, showInr(o.total)),
+        h('span', { class: 'mu xs' }, fmtH(o.hrs) + (o.per === 'car' ? (o.cars > 1 ? ' · ' + o.cars + ' cars' : ' · per car') : ' · ' + showInr(o.fare) + ' each'))))),
+      h('div', { class: 'sm' }, h('b', {}, 'Chosen: '), (MODE_ICON[sel.m] || '') + ' ' + sel.label + ' · ' + showInr(sel.total) + ' for ' + peopleWord(trav) + ' · about ' + fmtH(sel.hrs)),
       sel.note ? h('div', { class: 'mu xs' }, sel.note) : null,
       trainVsCar(l),
       h('div', { class: 'row wrap', style: 'gap:6px' }, legLinks(l).map(([t, u]) => ext(u, t, 'btn2 sm')))));
   });
   const tot = L.reduce((a, l) => a + l.sel.total, 0), cheap = L.reduce((a, l) => a + l.cheap, 0);
   out.push(h('section', { class: 'card hl' }, h('h2', {}, 'Total travel'),
-    L.map((l) => h('div', { class: 'kv sm' }, h('span', {}, (MODE_ICON[l.sel.m] || '') + ' ' + l.a.name + ' → ' + l.b.name), h('span', {}, '₹' + fmt(l.sel.total)))),
-    h('div', { class: 'kv' }, h('span', { class: 'b' }, 'For ' + peopleWord(trav)), h('span', { class: 'total sm2' }, '₹' + fmt(tot))),
-    h('div', { class: 'kv sm' }, h('span', {}, 'Cheapest possible on these legs'), h('span', {}, '₹' + fmt(cheap))),
-    tot > cheap ? h('div', { class: 'mu xs' }, 'Your choices cost ₹' + fmt(tot - cheap) + ' more than the cheapest.') : h('div', { class: 'mu xs' }, 'You already have the cheapest choice on every leg.'),
+    L.map((l) => h('div', { class: 'kv sm' }, h('span', {}, (MODE_ICON[l.sel.m] || '') + ' ' + l.a.name + ' → ' + l.b.name), h('span', {}, showInr(l.sel.total)))),
+    h('div', { class: 'kv' }, h('span', { class: 'b' }, 'For ' + peopleWord(trav)), h('span', { class: 'total sm2' }, showInr(tot))),
+    h('div', { class: 'kv sm' }, h('span', {}, 'Cheapest possible on these legs'), h('span', {}, showInr(cheap))),
+    tot > cheap ? h('div', { class: 'mu xs' }, 'Your choices cost ' + showInr(tot - cheap) + ' more than the cheapest.') : h('div', { class: 'mu xs' }, 'You already have the cheapest choice on every leg.'),
     h('div', { class: 'mu xs' }, 'Times and fares are estimates from distance. Real ones are on the booking links.')));
   const w = wholeTripModes();
   if (w) out.push(h('section', { class: 'card' }, w));
@@ -2289,7 +2336,7 @@ function tierCard(s, i, kind) {
     const tg = kind === 'eat' ? foodTag(x.text) : null;
     card.append(h('div', { class: 'line col', style: 'gap:3px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (k + 1) + '. ' : '') + x.name), tg ? chip(tg[0], tg[1]) : null),
-      x.price ? h('div', { class: 'xs b accent' }, x.price.slice(0, 60)) : null,
+      x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null).slice(0, 90)) : null,
       x.text ? h('div', { class: 'sm mu clamp' }, x.text) : null,
       h('div', { class: 'acts' }, ext(mapLink(x.name, place), 'Map', 'link'), kind === 'sleep' ? ext(booking(x.name + ' ' + place), 'Price for my dates', 'link') : ext('https://www.google.com/search?q=' + enc(x.name + ' ' + place + ' menu reviews'), 'Reviews', 'link'))));
   });
@@ -2312,13 +2359,13 @@ function tierTravel() {
   if (!L.length) return [h('div', { class: 'card' }, h('span', { class: 'spin' }), ' Finding your places on the map…')];
   const picks = L.map(tierPick), tot = picks.reduce((a, o) => a + o.total, 0), now = L.reduce((a, l) => a + l.sel.total, 0);
   const same = L.every((l, i) => l.mode === picks[i].m);
-  return [h('section', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, tierName() + ' travel'), chip('₹' + fmt(tot) + ' for ' + S.trip.travellers, 'plain')),
+  return [h('section', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, tierName() + ' travel'), chip(showInr(tot) + ' for ' + S.trip.travellers, 'plain')),
     L.map((l, i) => h('div', { class: 'line col', style: 'gap:4px' },
-      h('div', { class: 'row between' }, h('div', { class: 'b' }, l.a.name + ' → ' + l.b.name), h('span', { class: 'b' }, '₹' + fmt(picks[i].total))),
+      h('div', { class: 'row between' }, h('div', { class: 'b' }, l.a.name + ' → ' + l.b.name), h('span', { class: 'b' }, showInr(picks[i].total))),
       h('div', { class: 'sm mu' }, (MODE_ICON[picks[i].m] || '') + ' ' + picks[i].label + ' · ' + fmtH(picks[i].hrs) + ' · ' + nice(l.date, { day: 'numeric', month: 'short' }) + (l.mode === picks[i].m ? ' · in your plan' : '')),
       h('div', { class: 'acts' }, legLinks(Object.assign({}, l, { mode: picks[i].m })).slice(0, 3).map(([t, u]) => ext(u, t, 'link'))))),
     same ? h('div', { class: 'sm b' }, '✓ Your plan already uses these.') : h('button', { type: 'button', class: 'btn', onclick: () => set((s) => { L.forEach((l, i) => { s.trip.legModes[l.key] = picks[i].m; }); s.banner = 'Every leg now uses ' + tierName().toLowerCase() + ' travel. Costs are updated.'; }) }, 'Use these for my trip'),
-    same ? null : h('div', { class: 'mu xs' }, 'Your plan now: ₹' + fmt(now) + ' for travel.'),
+    same ? null : h('div', { class: 'mu xs' }, 'Your plan now: ' + showInr(now) + ' for travel.'),
     h('div', { class: 'mu xs' }, 'Change single legs on the Travel tab.'))];
 }
 function ticketsView() {
@@ -2327,7 +2374,7 @@ function ticketsView() {
     const dos = ((v && v.do) || []).concat(((v && v.see) || []).filter((x) => x.price || /ticket|entry|admission|fee|tour/i.test(x.text)));
     const seen = new Set(), list = dos.filter((x) => !seen.has(x.name) && seen.add(x.name));
     return h('section', { class: 'card' }, h('h2', {}, 'Things to book in ' + place),
-      list.length ? list.slice(0, 10).map((x) => h('div', { class: 'line row', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.price ? h('div', { class: 'xs b accent' }, x.price) : null),
+      list.length ? list.slice(0, 10).map((x) => h('div', { class: 'line row', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null)) : null),
         ext('https://www.google.com/search?q=' + enc('klook ' + x.name + ' ' + place), 'Find tickets', 'btn2 sm'))) : h('div', { class: 'mu sm' }, v ? 'No bookable activities in the guide.' : 'Not loaded yet.'),
       ext('https://www.google.com/search?q=' + enc('klook ' + place + ' tickets'), 'All Klook tickets for ' + place, 'btn2'));
   });
@@ -2390,7 +2437,7 @@ function placesToSee() {
     const skip = () => set((S2) => { S2.trip.skip = S2.trip.skip || {}; S2.trip.skip[s.key] = skipped.concat([x.name]); S2.trip.must = S2.trip.must || {}; S2.trip.must[s.key] = (S2.trip.must[s.key] || []).filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = 'Skipped "' + x.name + '". The plan is updated.'; });
     return h('div', { class: 'line col', style: 'gap:6px;opacity:' + (off ? 0.55 : 1) },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (idx + 1) + '. ' : '') + x.name), off ? chip('Skipped', 'plain') : on ? chip('★ Must see') : sch ? chip('In my trip', 'good') : chip('Not in trip', 'plain')),
-      x.price ? h('div', { class: 'xs b accent' }, x.price) : null,
+      x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null)) : null,
       x.text ? h('div', { class: 'sm mu clamp' }, x.text) : null,
       h('div', { class: 'row wrap', style: 'gap:6px' },
         off ? h('button', { type: 'button', class: 'btn2 sm', onclick: () => set((S2) => { S2.trip.skip[s.key] = skipped.filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is back.'; }) }, 'Undo skip')
@@ -2482,6 +2529,33 @@ function docsView() {
 }
 
 /* ============================ Settings ============================ */
+/* Settings: which currency amounts are shown in, and a converter */
+function moneyCard() {
+  const cur = S.settings.cur || 'INR';
+  return h('section', { class: 'card' }, h('h2', {}, 'Money'),
+    h('label', { for: 'cursel' }, 'Show amounts in'),
+    h('select', { id: 'cursel', class: 'inp', onchange: (e) => set((s) => { s.settings.cur = e.target.value; s.banner = 'Amounts now show in ' + (e.target.value === 'LOCAL' ? "each place's own money" : e.target.value) + '.'; }) },
+      MONEY_OPTS.map(([code, label]) => h('option', { value: code, selected: code === cur ? true : false }, label))),
+    h('div', { class: 'mu xs' }, 'Prices from guides are shown as written, with the amount in your choice in brackets. "Local" uses the money of the country you are looking at, so a Greek price shows in euros and a Thai one in baht. Totals on Cost show in your choice, or in rupees for "Local" when a trip covers several countries.'),
+    !RATES ? h('div', { class: 'mu xs' }, h('span', { class: 'spin' }), ' Loading exchange rates…') : h('div', { class: 'mu xs' }, 'Rates: ' + (RATES.updated || 'today') + '. Free rates from open.er-api.com, in rupees.'));
+}
+function converterCard() {
+  const c = S.settings.conv || (S.settings.conv = { a: '1000', from: 'INR', to: 'USD' });
+  if (!RATES) { ensureRates().then(render).catch(() => {}); return h('section', { class: 'card' }, h('h2', {}, 'Converter'), h('div', { class: 'sm' }, h('span', { class: 'spin' }), ' Loading exchange rates…')); }
+  const codes = Object.keys(RATES.rates).sort();
+  const val = Number(String(c.a).replace(/[^0-9.]/g, '')) || 0;
+  const inr = toInr(c.from, val);
+  const out = inr != null && RATES.rates[c.to] ? inr * RATES.rates[c.to] : null;
+  const pick = (id, key) => h('select', { id, class: 'inp', 'aria-label': key === 'from' ? 'Convert from' : 'Convert to', onchange: (e) => set((s) => { s.settings.conv = Object.assign({}, s.settings.conv, { [key]: e.target.value }); }) },
+    codes.map((code) => h('option', { value: code, selected: code === c[key] ? true : false }, code)));
+  return h('section', { class: 'card' }, h('h2', {}, 'Converter'),
+    h('label', { for: 'convamt' }, 'Amount'),
+    h('input', { id: 'convamt', class: 'inp', inputmode: 'decimal', value: c.a, onchange: (e) => set((s) => { s.settings.conv = Object.assign({}, s.settings.conv, { a: e.target.value }); }) }),
+    h('div', { class: 'grid2' }, h('div', {}, h('label', {}, 'From'), pick('convfrom', 'from')), h('div', {}, h('label', {}, 'To'), pick('convto', 'to'))),
+    h('div', { class: 'kv' }, h('span', { class: 'b' }, fmtNum(val) + ' ' + c.from + ' ='), h('span', { class: 'total sm2' }, out == null ? '—' : fmtMoney(c.to, out))),
+    h('div', { class: 'mu xs' }, out == null ? 'That rate is not available right now.' : '1 ' + c.from + ' = ' + fmtNum(RATES.rates[c.to] / (RATES.rates[c.from] || 1), 4) + ' ' + c.to + ' · rates ' + (RATES.updated || 'today')));
+}
+function fmtNum(n, d) { return Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: d == null ? 2 : d }); }
 function viewSettings() {
   const st = S.settings;
   const home = h('input', { id: 'home', class: 'inp', value: st.home.name, onchange: async (e) => {
@@ -2495,6 +2569,8 @@ function viewSettings() {
     h('h1', {}, 'Settings'),
     h('section', { class: 'card' }, h('h2', {}, 'Theme'), segs([['dark', '🌙 Dark'], ['light', '☀️ Day'], ['auto', 'Auto']], S.settings.theme, (v) => set((s) => { s.settings.theme = v; })),
       h('div', { class: 'mu xs' }, 'Auto follows your phone. The ☀️ / 🌙 button at the top switches quickly.')),
+    moneyCard(),
+    converterCard(),
     h('section', { class: 'card' }, h('h2', {}, 'About me'),
       h('label', { for: 'home' }, 'Home city'), home, h('div', { class: 'mu xs' }, [st.home.name, st.home.country].filter(Boolean).join(', ') + '. Trips start and end here unless you choose otherwise.'),
       h('label', { for: 'pp' }, 'Passport country'), h('input', { id: 'pp', class: 'inp', value: st.passport, onchange: (e) => set((s) => { s.settings.passport = e.target.value.trim() || 'India'; }) })),
