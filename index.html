@@ -59,6 +59,7 @@ p{margin:0}
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .clamp4{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 label{font-size:12px;font-weight:600;color:var(--mu)}
+.curpick{height:40px;border:1px solid var(--ln);border-radius:12px;background:var(--sf2);color:var(--ink);padding:0 6px;font-size:14px;max-width:112px;min-width:0}
 .inp{height:48px;border:1px solid var(--ln);border-radius:12px;padding:0 14px;background:var(--sf2);width:100%;min-width:0;outline:none;color:var(--ink)}
 .inp:focus{border-color:var(--focus)}
 .inp.num{width:120px;flex:none;text-align:right}
@@ -210,6 +211,7 @@ ul.clean{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
     <div class="brand">Trip Desk<small id="sub"></small></div>
     <div class="row" style="gap:8px">
       <button class="btn" id="install" type="button" hidden style="min-height:40px;padding:0 12px;font-size:14px">Install</button>
+      <select id="curpick" class="curpick" aria-label="Show money in" title="Show money in"></select>
       <button class="ibtn" id="themebtn" type="button" aria-label="Switch theme" style="font-size:17px">☀️</button>
       <button class="ibtn" id="gear" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg></button>
     </div>
@@ -499,7 +501,7 @@ function listItems(d, max) {
     let body = t.startsWith(name) ? t.slice(name.length).replace(/^[\s,.:;—–-]+/, '') : t;
     if (!body) body = t;
     const lat = parseFloat(li.getAttribute('data-plat')), lon = parseFloat(li.getAttribute('data-plon'));
-    out.push(Object.assign({ name, text: body.slice(0, 340), price: priceText }, isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 ? { lat, lon } : {}));
+    out.push(Object.assign({ name, text: body.slice(0, 900), price: priceText }, isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 ? { lat, lon } : {}));
   });
   return out.slice(0, max || 14);
 }
@@ -1508,9 +1510,29 @@ function applyTheme() {
   return day;
 }
 function toggleTheme() { const day = applyTheme(); set((s) => { s.settings.theme = day ? 'dark' : 'light'; }); }
+/* the header picker: Local or any currency the rate service knows */
+function syncCurPick() {
+  const sel = document.getElementById('curpick');
+  if (!sel || !RATES) return;
+  const codes = Object.keys(RATES.rates).sort();
+  const key = codes.join(',');
+  if (sel.dataset.codes !== key) {
+    let dn = null; try { dn = new Intl.DisplayNames(['en'], { type: 'currency' }); } catch (e) {}
+    const name = (c) => { try { return dn ? dn.of(c) : ''; } catch (e) { return ''; } };
+    sel.replaceChildren(
+      Object.assign(document.createElement('option'), { value: 'INR', textContent: '₹ INR' }),
+      Object.assign(document.createElement('option'), { value: 'LOCAL', textContent: 'Local money' }),
+      ...codes.filter((c) => c !== 'INR').map((c) => Object.assign(document.createElement('option'), { value: c, textContent: c + (name(c) ? ' · ' + name(c) : '') })));
+    sel.dataset.codes = key;
+  }
+  const want = (S.settings && S.settings.cur) || 'INR';
+  if (sel.value !== want) sel.value = want;
+  if (!sel.dataset.bound) { sel.dataset.bound = '1'; sel.addEventListener('change', (e) => set((s) => { s.settings.cur = e.target.value; s.banner = 'Amounts now show in ' + (e.target.value === 'LOCAL' ? "each place's own money" : e.target.value) + '.'; })); }
+}
 function renderNow() {
   if (OLD_TAB[S.tab]) S.tab = OLD_TAB[S.tab];
   applyTheme();
+  syncCurPick();
   const main = document.getElementById('main');
   const keepScroll = main.dataset.tab === S.tab ? main.scrollTop : 0;
   const ae = document.activeElement;
@@ -1541,6 +1563,16 @@ function statBox(k, v) { return h('div', { class: 'stat' }, h('div', { class: 'm
 function linkBtn(label, onclick, extra) { return h('button', Object.assign({ type: 'button', class: 'link', onclick }, extra || {}), label); }
 function iconBtn(name, label, disabled, onclick) { return h('button', { type: 'button', class: 'ibtn', 'aria-label': label, title: label, disabled: disabled ? true : null, onclick }, icon(name, 18)); }
 /* a card whose body is built only when open */
+/* a write-up that opens in full: "Read more" / "Show less" */
+function fullText(text, key, cls) {
+  const str = String(text || '');
+  if (!str) return null;
+  if (str.length <= 160) return h('div', { class: cls || 'sm mu' }, str);
+  const open = !!(mem.more && mem.more[key]);
+  return h('div', { class: 'col', style: 'gap:4px' },
+    h('div', { class: (cls || 'sm mu') + (open ? '' : ' clamp') }, str),
+    h('button', { type: 'button', class: 'link', 'aria-expanded': String(open), style: 'align-self:flex-start', onclick: () => { mem.more = mem.more || {}; mem.more[key] = !open; render(); } }, open ? 'Show less' : 'Read more'));
+}
 function fold(key, title, note, body, opts) {
   mem.open = mem.open || {};
   if (!(key in mem.open) && opts && opts.open) mem.open[key] = true;
@@ -1593,7 +1625,7 @@ function itemRow(it, di, d) {
     h('div', { class: 'grow col', style: 'gap:2px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, it.title),
         it.price ? h('span', { class: 'sm b nowrap' }, showInr(it.price, stopCur(it.stopKey).cc, stopCur(it.stopKey).code)) : it.cost ? h('span', { class: 'xs mu nowrap' }, showPrice(it.cost, stopCur(it.stopKey).cc, stopCur(it.stopKey).code).slice(0, 40)) : null),
-      it.text ? h('div', { class: 'sm mu clamp' }, it.text) : null,
+      it.text ? fullText(it.text, 'it:' + (it.stopKey || '') + ':' + it.title, 'sm mu') : null,
       acts.length ? h('div', { class: 'acts' }, acts) : null));
 }
 function addToDay(d) {
@@ -1610,7 +1642,7 @@ function extrasCard(s) {
   const place = shortName(s);
   return fold('extra:' + s.key, 'More in ' + place, (left.sights.length ? left.sights.length + ' sights not in your days' : '') + (left.sights.length && left.trips.length ? ' · ' : '') + (left.trips.length ? left.trips.length + ' day trips' : ''), () => [
     left.sights.length ? h('div', { class: 'sm' }, left.sights.slice(0, 10).map((x) => x.name).join(' · ')) : null,
-    left.trips.slice(0, 5).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? h('div', { class: 'mu xs clamp' }, x.text) : null),
+    left.trips.slice(0, 5).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(x.text, 'tk:' + x.name, 'mu xs') : null),
       h('button', { type: 'button', class: 'btn2', onclick: () => addStop(x.name, S.trip.stops.findIndex((y) => y.key === s.key) + 1) }, '＋ Stop'))),
     h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => changeNights(s.key, 1) }, '＋ A night in ' + place), h('button', { type: 'button', class: 'btn2', onclick: () => openPlace(s.key) }, 'All sights in ' + place))]);
 }
@@ -2337,7 +2369,7 @@ function tierCard(s, i, kind) {
     card.append(h('div', { class: 'line col', style: 'gap:3px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (k + 1) + '. ' : '') + x.name), tg ? chip(tg[0], tg[1]) : null),
       x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null).slice(0, 90)) : null,
-      x.text ? h('div', { class: 'sm mu clamp' }, x.text) : null,
+      x.text ? fullText(x.text, 'see:' + s.key + ':' + x.name, 'sm mu') : null,
       h('div', { class: 'acts' }, ext(mapLink(x.name, place), 'Map', 'link'), kind === 'sleep' ? ext(booking(x.name + ' ' + place), 'Price for my dates', 'link') : ext('https://www.google.com/search?q=' + enc(x.name + ' ' + place + ' menu reviews'), 'Reviews', 'link'))));
   });
   const stars = { premium: '4,5', comfort: '3,4', budget: '1,2' }[S.settings.budget];
@@ -2438,7 +2470,7 @@ function placesToSee() {
     return h('div', { class: 'line col', style: 'gap:6px;opacity:' + (off ? 0.55 : 1) },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (idx + 1) + '. ' : '') + x.name), off ? chip('Skipped', 'plain') : on ? chip('★ Must see') : sch ? chip('In my trip', 'good') : chip('Not in trip', 'plain')),
       x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null)) : null,
-      x.text ? h('div', { class: 'sm mu clamp' }, x.text) : null,
+      x.text ? fullText(x.text, 'see:' + s.key + ':' + x.name, 'sm mu') : null,
       h('div', { class: 'row wrap', style: 'gap:6px' },
         off ? h('button', { type: 'button', class: 'btn2 sm', onclick: () => set((S2) => { S2.trip.skip[s.key] = skipped.filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is back.'; }) }, 'Undo skip')
           : [sch || on ? null : h('button', { type: 'button', class: 'btn2 sm', onclick: () => { addSight(s.name, s.key, x.name); set((S2) => { S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is in your trip. The day-wise plan is updated.'; }); } }, '＋ Add to my trip'),
@@ -2452,7 +2484,7 @@ function placesToSee() {
   const trips = (v.gonext || []).concat((v.dests || []).filter((d) => !(v.gonext || []).some((g) => g.name === d.name)));
   if (trips.length) out.push(h('section', { class: 'card' }, h('h2', {}, 'Main places nearby'),
     trips.slice(0, 10).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' },
-      h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? h('div', { class: 'mu xs clamp' }, x.text) : null),
+      h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(x.text, 'tk:' + x.name, 'mu xs') : null),
       ext(mapLink(x.name, place), 'Map', 'link'),
       S.trip.stops.some((y) => y.key === keyOf(x.name)) ? chip('✓ In trip', 'good') : h('button', { type: 'button', class: 'btn2 sm', onclick: () => addStop(x.name, i + 1) }, '＋ Add')))));
   out.push(h('section', { class: 'card' }, h('h2', {}, 'Latest vlogs'), h('div', { class: 'mu xs' }, 'Newest to oldest.'), vlogBody(s)));
