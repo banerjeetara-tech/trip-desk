@@ -796,16 +796,29 @@ function visaFor(country) {
 }
 
 /* ---------- news (Bing News RSS through your proxy) ---------- */
+/* news for a place: several Bing News searches through your proxy (like Brief), merged, de-duplicated, newest first */
+const NEWS_IMPORTANT = /advisory|warning|alert|closed|closure|shut|strike|bandh|protest|riot|flood|cyclone|landslide|earthquake|fire|outbreak|ban|curfew|evacuat|attack|blast|terror|cancel|disrupt|stranded|airport|rail|road block|heatwave|monsoon/i;
+function parseNewsRss(xml) {
+  const d = new DOMParser().parseFromString(xml, 'text/xml');
+  return [...d.querySelectorAll('item')].map((it) => {
+    const date = txt(it.querySelector('pubDate'));
+    const title = txt(it.querySelector('title'));
+    return { title, link: txt(it.querySelector('link')), date, ts: Date.parse(date) || 0, source: txt(it.getElementsByTagName('News:Source')[0] || it.querySelector('source')) };
+  }).filter((x) => x.title);
+}
 async function fetchNews(place) {
   if (!S.settings.proxy) throw new Error('Add a proxy URL in Settings to load news');
-  const rss = 'https://www.bing.com/news/search?q=' + enc(place + ' travel OR tourists OR advisory') + '&format=rss&mkt=en-IN';
-  const xml = await getText(S.settings.proxy + enc(rss), 15000);
-  const d = new DOMParser().parseFromString(xml, 'text/xml');
-  const cutoff = Date.now() - 60 * DAY;
-  return [...d.querySelectorAll('item')].map((it) => ({
-    title: txt(it.querySelector('title')), link: txt(it.querySelector('link')), date: txt(it.querySelector('pubDate')),
-    source: txt(it.getElementsByTagName('News:Source')[0] || it.querySelector('source'))
-  })).filter((x) => x.title && (!x.date || Date.parse(x.date) > cutoff)).slice(0, 6);
+  const queries = [place + ' travel', place + ' advisory OR warning OR closed OR strike OR flood OR protest', place + ' news'];
+  const got = await Promise.allSettled(queries.map((q) => {
+    const rss = 'https://www.bing.com/news/search?q=' + enc(q) + '&format=rss&mkt=en-IN';
+    return getText(S.settings.proxy + enc(rss), 15000).then(parseNewsRss);
+  }));
+  const all = got.filter((g) => g.status === 'fulfilled').flatMap((g) => g.value);
+  if (!all.length) throw new Error('News could not be loaded right now. Try again in a few minutes.');
+  const cutoff = Date.now() - 60 * DAY, seen = new Set();
+  return all.filter((x) => (!x.ts || x.ts > cutoff) && !seen.has(keyOf(x.title).slice(0, 60)) && seen.add(keyOf(x.title).slice(0, 60)))
+    .sort((a, b) => b.ts - a.ts).slice(0, 10)
+    .map((x) => Object.assign(x, { important: NEWS_IMPORTANT.test(x.title) }));
 }
 
 /* ---------- vlogs: latest YouTube videos for a place, newest first (through your proxy) ---------- */
@@ -1698,7 +1711,7 @@ function newsBody(s) {
     : h('button', { type: 'button', class: 'btn2', onclick: async () => { mem.news[s.key] = { loading: true }; render(); try { mem.news[s.key] = { items: await fetchNews(shortName(s)) }; } catch (e) { mem.news[s.key] = { error: e.message }; } render(); } }, nw && nw.items ? 'Refresh news' : 'Load travel news');
   return h('div', { class: 'col' }, h('h3', {}, 'Travel news'), btn,
     nw && nw.error ? h('div', { class: 'warnbox sm' }, nw.error) : null,
-    nw && nw.items ? (nw.items.length ? nw.items.map((x) => h('div', { class: 'line' }, ext(x.link, x.title), h('div', { class: 'mu xs' }, [x.source, x.date ? new Date(x.date).toLocaleDateString('en-GB') : ''].filter(Boolean).join(' · ')))) : h('div', { class: 'mu sm' }, 'No travel news in the last 60 days.')) : null);
+    nw && nw.items ? (nw.items.length ? nw.items.map((x) => h('div', { class: 'line col', style: 'gap:2px' }, h('div', { class: 'row', style: 'gap:6px;align-items:flex-start' }, x.important ? chip('Important', 'plain') : null, ext(x.link, x.title)), h('div', { class: 'mu xs' }, [x.source, x.ts ? new Date(x.ts).toLocaleDateString('en-GB') : ''].filter(Boolean).join(' · ')))) : h('div', { class: 'mu sm' }, 'No travel news in the last 60 days.')) : null);
 }
 function vlogBody(s) {
   const place = shortName(s), k = s.key, q = enc(place + ' travel vlog');
