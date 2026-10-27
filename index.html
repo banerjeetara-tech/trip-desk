@@ -59,7 +59,9 @@ p{margin:0}
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .clamp4{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 label{font-size:12px;font-weight:600;color:var(--mu)}
-.curpick{height:40px;border:1px solid var(--ln);border-radius:12px;background:var(--sf2);color:var(--ink);padding:0 6px;font-size:14px;max-width:112px;min-width:0}
+.curpick{height:40px;border:1px solid var(--ln);border-radius:12px;background:var(--sf2);color:var(--ink);padding:0 4px 0 8px;font-size:14px;font-weight:600;width:auto;max-width:84px;min-width:0;flex:none}
+header .brand{min-width:0;flex:1 1 auto;overflow:hidden}
+header .row{flex:none;min-width:0}
 .inp{height:48px;border:1px solid var(--ln);border-radius:12px;padding:0 14px;background:var(--sf2);width:100%;min-width:0;outline:none;color:var(--ink)}
 .inp:focus{border-color:var(--focus)}
 .inp.num{width:120px;flex:none;text-align:right}
@@ -579,6 +581,19 @@ function faresIn(text, localCode) {
     if (a > 0) out.push({ raw: m[0].trim(), code, a, b });
   }
   return out;
+}
+/* a guide's text: fares in it are shown in the chosen currency, with the amount as written kept */
+function convText(text, cc, localCode) {
+  const str = String(text || '');
+  if (!str || !RATES) return str;
+  const target = moneyTarget(cc, localCode);
+  return str.replace(FARE_RE, (whole) => {
+    const f = faresIn(whole, localCode || localCodeFor(cc))[0];
+    if (!f || !f.code || f.code === target) return whole;
+    const lo = toInr(f.code, f.a);
+    if (lo == null) return whole;
+    return whole + ' (' + showInr(lo, cc, localCode) + ')';
+  });
 }
 function toInr(code, amt) {
   if (!code || amt == null) return null;
@@ -1520,9 +1535,9 @@ function syncCurPick() {
     let dn = null; try { dn = new Intl.DisplayNames(['en'], { type: 'currency' }); } catch (e) {}
     const name = (c) => { try { return dn ? dn.of(c) : ''; } catch (e) { return ''; } };
     sel.replaceChildren(
-      Object.assign(document.createElement('option'), { value: 'INR', textContent: '₹ INR' }),
-      Object.assign(document.createElement('option'), { value: 'LOCAL', textContent: 'Local money' }),
-      ...codes.filter((c) => c !== 'INR').map((c) => Object.assign(document.createElement('option'), { value: c, textContent: c + (name(c) ? ' · ' + name(c) : '') })));
+      Object.assign(document.createElement('option'), { value: 'INR', textContent: 'INR' }),
+      Object.assign(document.createElement('option'), { value: 'LOCAL', textContent: 'Local' }),
+      ...codes.filter((c) => c !== 'INR').map((c) => Object.assign(document.createElement('option'), { value: c, textContent: c, title: name(c) || c })));
     sel.dataset.codes = key;
   }
   const want = (S.settings && S.settings.cur) || 'INR';
@@ -1625,7 +1640,7 @@ function itemRow(it, di, d) {
     h('div', { class: 'grow col', style: 'gap:2px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, it.title),
         it.price ? h('span', { class: 'sm b nowrap' }, showInr(it.price, stopCur(it.stopKey).cc, stopCur(it.stopKey).code)) : it.cost ? h('span', { class: 'xs mu nowrap' }, showPrice(it.cost, stopCur(it.stopKey).cc, stopCur(it.stopKey).code).slice(0, 40)) : null),
-      it.text ? fullText(it.text, 'it:' + (it.stopKey || '') + ':' + it.title, 'sm mu') : null,
+      it.text ? fullText(convText(it.text, stopCur(it.stopKey).cc, stopCur(it.stopKey).code), 'it:' + (it.stopKey || '') + ':' + it.title, 'sm mu') : null,
       acts.length ? h('div', { class: 'acts' }, acts) : null));
 }
 function addToDay(d) {
@@ -1642,7 +1657,7 @@ function extrasCard(s) {
   const place = shortName(s);
   return fold('extra:' + s.key, 'More in ' + place, (left.sights.length ? left.sights.length + ' sights not in your days' : '') + (left.sights.length && left.trips.length ? ' · ' : '') + (left.trips.length ? left.trips.length + ' day trips' : ''), () => [
     left.sights.length ? h('div', { class: 'sm' }, left.sights.slice(0, 10).map((x) => x.name).join(' · ')) : null,
-    left.trips.slice(0, 5).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(x.text, 'tk:' + x.name, 'mu xs') : null),
+    left.trips.slice(0, 5).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(convText(x.text, null, null), 'tk:' + x.name, 'mu xs') : null),
       h('button', { type: 'button', class: 'btn2', onclick: () => addStop(x.name, S.trip.stops.findIndex((y) => y.key === s.key) + 1) }, '＋ Stop'))),
     h('div', { class: 'row wrap' }, h('button', { type: 'button', class: 'btn2', onclick: () => changeNights(s.key, 1) }, '＋ A night in ' + place), h('button', { type: 'button', class: 'btn2', onclick: () => openPlace(s.key) }, 'All sights in ' + place))]);
 }
@@ -2369,7 +2384,7 @@ function tierCard(s, i, kind) {
     card.append(h('div', { class: 'line col', style: 'gap:3px' },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (k + 1) + '. ' : '') + x.name), tg ? chip(tg[0], tg[1]) : null),
       x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null).slice(0, 90)) : null,
-      x.text ? fullText(x.text, 'see:' + s.key + ':' + x.name, 'sm mu') : null,
+      x.text ? fullText(convText(x.text, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null), 'see:' + s.key + ':' + x.name, 'sm mu') : null,
       h('div', { class: 'acts' }, ext(mapLink(x.name, place), 'Map', 'link'), kind === 'sleep' ? ext(booking(x.name + ' ' + place), 'Price for my dates', 'link') : ext('https://www.google.com/search?q=' + enc(x.name + ' ' + place + ' menu reviews'), 'Reviews', 'link'))));
   });
   const stars = { premium: '4,5', comfort: '3,4', budget: '1,2' }[S.settings.budget];
@@ -2470,7 +2485,7 @@ function placesToSee() {
     return h('div', { class: 'line col', style: 'gap:6px;opacity:' + (off ? 0.55 : 1) },
       h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'b' }, (x.lat != null ? (idx + 1) + '. ' : '') + x.name), off ? chip('Skipped', 'plain') : on ? chip('★ Must see') : sch ? chip('In my trip', 'good') : chip('Not in trip', 'plain')),
       x.price ? h('div', { class: 'xs b accent' }, showPrice(x.price, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null)) : null,
-      x.text ? fullText(x.text, 'see:' + s.key + ':' + x.name, 'sm mu') : null,
+      x.text ? fullText(convText(x.text, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null), 'see:' + s.key + ':' + x.name, 'sm mu') : null,
       h('div', { class: 'row wrap', style: 'gap:6px' },
         off ? h('button', { type: 'button', class: 'btn2 sm', onclick: () => set((S2) => { S2.trip.skip[s.key] = skipped.filter((n) => n !== x.name); S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is back.'; }) }, 'Undo skip')
           : [sch || on ? null : h('button', { type: 'button', class: 'btn2 sm', onclick: () => { addSight(s.name, s.key, x.name); set((S2) => { S2.trip.swaps = {}; S2.banner = '"' + x.name + '" is in your trip. The day-wise plan is updated.'; }); } }, '＋ Add to my trip'),
@@ -2484,7 +2499,7 @@ function placesToSee() {
   const trips = (v.gonext || []).concat((v.dests || []).filter((d) => !(v.gonext || []).some((g) => g.name === d.name)));
   if (trips.length) out.push(h('section', { class: 'card' }, h('h2', {}, 'Main places nearby'),
     trips.slice(0, 10).map((x) => h('div', { class: 'row line', style: 'align-items:flex-start' },
-      h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(x.text, 'tk:' + x.name, 'mu xs') : null),
+      h('div', { class: 'grow' }, h('div', { class: 'b' }, x.name), x.text ? fullText(convText(x.text, s.geo && s.geo.cc, R[s.key] && R[s.key].cur ? R[s.key].cur.code : null), 'tk:' + x.name, 'mu xs') : null),
       ext(mapLink(x.name, place), 'Map', 'link'),
       S.trip.stops.some((y) => y.key === keyOf(x.name)) ? chip('✓ In trip', 'good') : h('button', { type: 'button', class: 'btn2 sm', onclick: () => addStop(x.name, i + 1) }, '＋ Add')))));
   out.push(h('section', { class: 'card' }, h('h2', {}, 'Latest vlogs'), h('div', { class: 'mu xs' }, 'Newest to oldest.'), vlogBody(s)));
