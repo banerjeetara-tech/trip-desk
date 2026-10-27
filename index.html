@@ -1200,6 +1200,36 @@ async function placeSuggestions(q) {
   const score = (it) => (norm(it.name).startsWith(nq) ? 2 : 0) + (homeC && norm(it.desc).includes(homeC) ? 3 : 0);
   return out.map((it, i) => ({ it, i, s: score(it) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.it).slice(0, 8);
 }
+/* type "Varanasi, Ayo": suggestions follow the piece you are typing, and a tap replaces only that piece */
+const SEP_RE = /,|;|→|->|>|\+|&|\bthen\b|\band\b|\bvia\b|\bto\b/gi;
+function segmentAt(text) {
+  let end = 0, m; SEP_RE.lastIndex = 0;
+  while ((m = SEP_RE.exec(text))) end = m.index + m[0].length;
+  return { before: text.slice(0, end), seg: text.slice(end).trim() };
+}
+function segmentSuggest(inputId, onPick) {
+  return (e) => {
+    const st = SUG[inputId] || (SUG[inputId] = {});
+    const parts = segmentAt(e.target.value);
+    st.before = parts.before; st.pick = onPick; st.seg = parts.seg;
+    clearTimeout(st.timer);
+    if (parts.seg.length < 2) { st.items = []; fillSuggest(inputId); return; }
+    st.timer = setTimeout(async () => {
+      const items = await placeSuggestions(parts.seg).catch(() => []);
+      if ((SUG[inputId] || {}).seg !== parts.seg) return;
+      st.items = items; fillSuggest(inputId);
+    }, 250);
+  };
+}
+/* a tapped suggestion fills its own piece, then a comma, so the next place can be typed */
+function pickWizSegment(name) {
+  const el = document.getElementById('wiz'), w = wiz(), st = SUG.wiz || (SUG.wiz = {});
+  const lead = (st.before || '').replace(/\s+$/, '');
+  const text = (lead ? lead + ' ' : '') + name + ', ';
+  w.q = text; st.items = []; st.seg = '';
+  if (el) { el.value = text; el.focus(); }
+  save(); fillSuggest('wiz');
+}
 function suggestFor(inputId, onPick) {
   return (e) => {
     const st = SUG[inputId] || (SUG[inputId] = {});
@@ -1930,14 +1960,14 @@ function plannerForm() {
   return h('section', { class: 'col' },
     h('label', { for: 'wiz' }, 'Main location'),
     h('input', { id: 'wiz', class: 'inp', type: 'search', value: w.q || '', placeholder: 'Kerala · or · Varanasi then Ayodhya', autocomplete: 'off',
-      oninput: (e) => { w.q = e.target.value; save(); suggestFor('wiz', (n) => loadMain(n))(e); },
+      oninput: (e) => { w.q = e.target.value; save(); segmentSuggest('wiz', pickWizSegment)(e); },
       onkeydown: (e) => { if (e.key === 'Enter' && e.target.value.trim()) loadMain(e.target.value); } }),
     suggestBox('wiz'),
     h('div', { class: 'boxes' },
       h('div', {}, h('small', {}, 'From'), h('input', { id: 'start', type: 'date', value: S.trip.start, 'aria-label': 'Start date', onchange: (e) => { if (e.target.value) set((s) => { s.trip.start = e.target.value; s.banner = has ? 'Dates moved to ' + nice(e.target.value) + '. Every tab is updated.' : ''; }); } })),
       h('div', {}, h('small', {}, 'Days'), h('div', { class: 'mini' }, h('button', { type: 'button', 'aria-label': 'Fewer days', onclick: () => setDays(days - 1) }, '−'), h('b', {}, String(days)), h('button', { type: 'button', 'aria-label': 'More days', onclick: () => setDays(days + 1) }, '+'))),
       h('div', {}, h('small', {}, 'People'), h('div', { class: 'mini' }, h('button', { type: 'button', 'aria-label': 'Fewer people', onclick: () => setPeople(S.trip.travellers - 1) }, '−'), h('b', {}, String(S.trip.travellers)), h('button', { type: 'button', 'aria-label': 'More people', onclick: () => setPeople(S.trip.travellers + 1) }, '+')))),
-    w.main ? null : h('button', { type: 'button', class: 'btn big', onclick: () => { const el = document.getElementById('wiz'); if (el && el.value.trim()) loadMain(el.value); else { toast('Type a main location first.'); if (el) el.focus(); } } }, 'Show places to visit'));
+    h('button', { type: 'button', class: 'btn big', onclick: () => { const el = document.getElementById('wiz'); if (el && el.value.trim()) loadMain(el.value); else { toast('Type a main location first.'); if (el) el.focus(); } } }, w.main ? 'Update the places' : 'Show places to visit'));
 }
 function pickCard() {
   const w = pk(), ws = wst();
